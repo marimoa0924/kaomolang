@@ -43,16 +43,22 @@ namespace Kaomoji
         void AddFat(float n) => Fat = Math.Clamp(Fat + (n > 0 && Traits[Trait.Mimic] >= 2 ? n / 2 : n), 0, 100);
 
         // 낮: 만남 이벤트 하나
-        public (Result r, Emo ans, List<string> msgs) DoEncounter(string placeId, Emo eye, Emo mouth)
+        // eye/mouth = 의태가 흔들린 뒤 실제로 지은 얼굴
+        public (Result r, Emo ans, List<string> msgs, Emo eye, Emo mouth) DoEncounter(string placeId, Emo eye, Emo mouth)
         {
             var p = PlaceById(placeId);
             var ev = NextEvent(placeId);
             var msgs = new List<string>();
             if (Fat >= Balance.FatShaky) // 의태가 흔들림: 눈이나 입 하나가 무작위로 바뀜
             {
-                if (rng.Next(2) == 0) eye = Eyes[rng.Next(Eyes.Count)];
+                var planned = Face(eye, mouth);
+                bool swapEye = rng.Next(2) == 0;
+                if (swapEye) eye = Eyes[rng.Next(Eyes.Count)];
                 else mouth = Mouths[rng.Next(Mouths.Count)];
-                msgs.Add($"의태가 흔들렸다! 얼굴이 {Face(eye, mouth)} 로 바뀌었다.");
+                var now = Face(eye, mouth);
+                msgs.Add(now == planned
+                    ? "의태가 흔들렸지만 겨우 버텼다."
+                    : $"의태가 흔들렸다! {(swapEye ? "눈" : "입")}이 멋대로 바뀌었다: {planned} → {now}");
             }
             var r = Judge(eye, mouth, ev.Answer);
             Visits[placeId] = Visits.GetValueOrDefault(placeId) + 1;
@@ -80,7 +86,7 @@ namespace Kaomoji
                 msgs.Add(r == Result.Creepy ? "상대가 움찔한다. 주변 사람들이 수군댄다." : "상대가 어색하게 웃는다. 누군가 너를 빤히 본다.");
             }
             else msgs.Add("상대가 고개를 갸웃한다.");
-            return (r, ev.Answer, msgs);
+            return (r, ev.Answer, msgs, eye, mouth);
         }
 
         public void DoRest()

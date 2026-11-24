@@ -21,10 +21,20 @@ namespace Kaomoji.Tests
         public void FirstMeetingTeachesPlaceEmotion()
         {
             var s = new GameState(1);
-            var (r, _, _) = s.DoEncounter("station", Emo.Joy, Emo.Neutral);
+            var (r, _, _, _, _) = s.DoEncounter("station", Emo.Joy, Emo.Neutral);
             Assert.AreEqual(Result.Success, r);
             Assert.Contains(Emo.Sad, s.Eyes);
             Assert.IsTrue(s.IsNight);
+        }
+
+        [Test]
+        public void ShakyFaceIsJudgedAsActuallyMade()
+        {
+            var s = new GameState(3) { Fat = 90 };
+            s.Eyes.Add(Emo.Sad);
+            var (r, ans, msgs, eye, mouth) = s.DoEncounter("park", Emo.Joy, Emo.Neutral);
+            Assert.AreEqual(GameState.Judge(eye, mouth, ans), r);
+            Assert.IsTrue(msgs[0].StartsWith("의태가 흔들렸"));
         }
 
         [Test]

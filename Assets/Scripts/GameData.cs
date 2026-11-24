@@ -71,12 +71,12 @@ namespace Kaomoji
 
         public static readonly Dictionary<Emo, EmoInfo> E = new()
         {
-            [Emo.Joy] = new("기쁨", "^", "^", "▽", "#ffd166"),
-            [Emo.Sad] = new("슬픔", "T", "T", "﹏", "#74a9ff"),
-            [Emo.Anger] = new("분노", "`", "´", "益", "#ff6b6b"),
-            [Emo.Surprise] = new("놀람", "゚", "゚", "Д", "#b388ff"),
-            [Emo.Shy] = new("부끄러움", ">", "<", "ω", "#ff9ecf"),
-            [Emo.Neutral] = new("중립", "・", "・", "_", "#bbbbbb"),
+            [Emo.Joy] = new("기쁨", "^", "^", "▽", "#ffd23f"),
+            [Emo.Sad] = new("슬픔", "T", "T", "﹏", "#5aa9ff"),
+            [Emo.Anger] = new("분노", "`", "´", "益", "#ff5a5a"),
+            [Emo.Surprise] = new("놀람", "゚", "゚", "Д", "#b07cff"),
+            [Emo.Shy] = new("부끄러움", ">", "<", "ω", "#ff8fc8"),
+            [Emo.Neutral] = new("중립", "・", "・", "_", "#c8c8d0"),
         };
 
         public static string Face(Emo eye, Emo mouth) => $"({E[eye].EyeL}{E[mouth].Mouth}{E[eye].EyeR})";
