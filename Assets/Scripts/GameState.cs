@@ -133,9 +133,19 @@ namespace Kaomoji
         public bool CanRaise(Trait t) => Points > 0 && Traits[t] < 2;
         public void Raise(Trait t) { if (!CanRaise(t)) return; Points--; Traits[t]++; }
 
+        // 답장을 끝내면 특성 창이 열리기 전에 포인트를 준다. 두 번 불러도 한 번만.
+        bool nightPointGiven;
+        public void GrantNightPoint()
+        {
+            if (nightPointGiven) return;
+            Points++;
+            nightPointGiven = true;
+        }
+
         public void EndNight()
         {
-            Points++;
+            GrantNightPoint();
+            nightPointGiven = false;
             if (Day >= Balance.Days) { Ending = FinalEnding(); return; }
             Day++;
             IsNight = false; Uploaded = false; Went = null;

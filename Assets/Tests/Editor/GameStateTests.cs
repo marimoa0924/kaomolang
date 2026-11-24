@@ -57,8 +57,9 @@ namespace Kaomoji.Tests
             Assert.AreEqual(Ending.Absorb, s.FinalEnding());
 
             s = new GameState(1);
-            for (int d = 0; d < Balance.Days; d++) s.EndNight();
+            for (int d = 0; d < Balance.Days; d++) { s.GrantNightPoint(); s.GrantNightPoint(); s.EndNight(); }
             Assert.AreEqual(Ending.Normal, s.Ending);
+            Assert.AreEqual(Balance.Days, s.Points);
         }
     }
 }
