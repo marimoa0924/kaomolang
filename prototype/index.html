@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>카오모지 프로토타입</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #2b2540; font-family: system-ui, sans-serif; color: #222; display: flex; justify-content: center; min-height: 100vh; }
+  #phone { width: 100%; max-width: 400px; min-height: 100vh; background: #fdf8ff; padding: 12px 16px 24px; }
+  header { display: flex; justify-content: space-between; font-size: 13px; color: #666; margin-bottom: 8px; }
+  h2 { font-size: 18px; margin: 8px 0; }
+  .stats div { display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 3px 0; }
+  .bar { flex: 1; height: 8px; background: #eee; border-radius: 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; }
+  .apps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 20px; }
+  button { font: inherit; border: 1px solid #ccc; background: #fff; border-radius: 10px; padding: 8px 10px; cursor: pointer; }
+  button:disabled { opacity: .35; cursor: default; }
+  button.sel { background: #2b2540; color: #fff; border-color: #2b2540; }
+  .apps button { aspect-ratio: 1; font-size: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+  .apps b { font-size: 26px; }
+  .card { border: 1px solid #ddd; border-radius: 12px; padding: 10px; margin: 8px 0; background: #fff; }
+  .say { font-size: 20px; letter-spacing: 2px; background: #f1ecff; border-radius: 12px; padding: 8px; display: inline-block; }
+  .post { font-size: 20px; letter-spacing: 1px; }
+  .sym { color: #6a3df0; font-weight: bold; }
+  .word { background: #ffe9a8; border-radius: 4px; padding: 0 3px; font-size: 15px; }
+  .clue { font-size: 13px; color: #555; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; align-items: center; }
+  .row > span { width: 28px; font-size: 12px; color: #888; }
+  .preview { text-align: center; font-size: 34px; margin: 6px 0; }
+  .builder { position: sticky; bottom: 0; background: #fdf8ff; border-top: 1px solid #ddd; padding-top: 6px; }
+  .msg { background: #2b2540; color: #fff; border-radius: 10px; padding: 10px; margin: 8px 0; font-size: 14px; white-space: pre-line; }
+  .back { margin-bottom: 4px; }
+  .nb td { padding: 4px 6px; font-size: 18px; }
+  .st { font-size: 11px; vertical-align: super; }
+  .ending { text-align: center; padding-top: 30vh; }
+</style>
+</head>
+<body>
+<div id="phone"></div>
+<script src="game.js"></script>
+<script>
+let S = newGame(), screen = 'home', sel = { eye: 'neutral', mouth: 'neutral' }, msg = '', place = null;
+const $ = document.getElementById('phone');
+const go = (s) => { screen = s; msg = ''; render(); };
+const say = (m) => { msg = m; render(); };
+
+function bar(label, v, max, color) {
+  return `<div><span style="width:56px">${label}</span><div class="bar"><i style="width:${Math.min(100, v / max * 100)}%;background:${color}"></i></div><span>${Math.round(v)}</span></div>`;
+}
+
+// 카오모지 조립 바: 만남 이벤트와 SNS가 같이 쓴다
+function builder(action, label) {
+  const btn = (k, e, txt) => `<button class="${sel[k] === e ? 'sel' : ''}" onclick="sel.${k}='${e}';render()">${txt}</button>`;
+  return `<div class="builder">
+    <div class="row"><span>눈</span>${S.eyes.map((e) => btn('eye', e, EMO[e].eye.join(' '))).join('')}</div>
+    <div class="row"><span>입</span>${S.mouths.map((e) => btn('mouth', e, EMO[e].mouth)).join('')}</div>
+    <div class="preview">${face(sel.eye, sel.mouth)}</div>
+    ${action ? `<button style="width:100%" onclick="${action}">${label}</button>` : ''}
+  </div>`;
+}
+
+function postText(t) {
+  return t.split(' ').map((w) => SYM[w] ? (solved(S, w) ? `<span class="word">${EMO[SYM[w]].n}</span>` : `<span class="sym">${w}</span>`) : w).join(' ');
+}
+
+const back = `<button class="back" onclick="go('home')">← 홈</button>`;
+
+const screens = {
+  home() {
+    const night = S.phase === 'night';
+    const app = (icon, name, fn, on = true) => `<button ${on ? '' : 'disabled'} onclick="${fn}"><b>${icon}</b>${name}</button>`;
+    return `<h2>${night ? '🌙 밤' : '☀️ 낮'} — 오늘 할 일: ${night ? 'SNS에서 업로드하고 팬 글 3개에 답장' : '외출하거나 휴식'}</h2>
+      <div class="stats">
+        ${bar('팔로워', S.followers, BAL.FOLLOWER_GOAL, '#6a3df0')}
+        ${bar('의심도', S.sus, 100, '#ff6b6b')}
+        ${bar('의태피로', S.fat, 100, S.fat >= BAL.FAT_SHAKY ? '#ff3b3b' : '#f4a261')}
+      </div>
+      <div class="apps">
+        ${app('🚶', '외출', "go('places')", !night)}
+        ${app('🛏️', '휴식', 'rest()', !night)}
+        ${app('📱', 'SNS', "go('sns')", night)}
+        ${app('📒', '수첩', "go('notebook')")}
+        ${app('⭐', `특성${S.points ? ` (${S.points})` : ''}`, "go('traits')")}
+      </div>`;
+  },
+  places() {
+    return back + `<h2>어디로 갈까</h2>` + Object.entries(PLACES).map(([id, p]) =>
+      `<button class="card" style="width:100%;text-align:left" onclick="place='${id}';sel={eye:'neutral',mouth:'neutral'};go('encounter')">
+        <b>${p.n}</b> · ${p.npc}<br><span class="clue">가본 횟수 ${S.visits[id] || 0} · 호감 ${'♥'.repeat(S.aff[id] || 0) || '-'}</span></button>`).join('');
+  },
+  encounter() {
+    const p = PLACES[place], ev = p.ev[Math.min(S.visits[place] || 0, 1)];
+    return `<h2>${p.n} — ${p.npc}</h2>
+      <div class="card"><div class="clue">🖼️ ${ev.sit}</div><p class="say">${ev.say}</p></div>
+      <p class="clue">어떤 표정으로 반응할까?${S.fat >= BAL.FAT_SHAKY ? ' <b style="color:red">(의태 피로가 높다. 얼굴이 멋대로 바뀔지도)</b>' : ''}</p>
+      ${builder('meet()', '이 표정으로 반응하기')}`;
+  },
+  sns() {
+    const done = S.uploaded && S.replied.filter(Boolean).length === 3;
+    const photo = S.went === 'room' || !S.went ? '🛏️ 방 사진' : `📷 ${PLACES[S.went].n} 사진`;
+    return back + `<h2>📱 피드 — ${S.day}일째 밤</h2>
+      <div class="card"><b>업로드</b> · ${photo}<br>${S.uploaded ? '올림 ✔' : `<button onclick="upload()">지금 얼굴을 달아서 올리기</button>`}</div>
+      ${POSTS[S.day - 1].map((p, i) => {
+        const tint = S.traits.empathy >= 1 ? `style="background:${EMO[p.e].c}22"` : '';
+        const clues = p.c.slice(0, S.traits.decode >= 1 ? 2 : 1).join(' · ');
+        const rep = S.replied[i];
+        return `<div class="card" ${tint}><div class="post">${postText(p.t)}</div><div class="clue">${clues}</div>
+          ${rep ? `<div>↳ 답장 ${rep.face} — <b>${RES[rep.r]}</b></div>` : `<button onclick="reply(${i})">이 글에 답장</button>`}</div>`;
+      }).join('')}
+      ${done ? `<button style="width:100%" onclick="sleep()">💤 잠들기 (${S.day}일째 끝)</button>` : ''}
+      ${builder()}`;
+  },
+  notebook() {
+    const rows = FEELINGS.map((e) => {
+      const syms = Object.keys(SYM).filter((s) => SYM[s] === e && S.stickers[s]);
+      return `<tr><td style="color:${EMO[e].c}">${EMO[e].n}</td><td>${syms.map((s) => solved(S, s) ? `<b>${s}</b>✔` : `${s}<span class="st">●${S.stickers[s]}</span>`).join(' ')}</td></tr>`;
+    }).join('');
+    const unk = Object.keys(S.seen).filter((s) => !S.stickers[s]);
+    return back + `<h2>📒 해독 수첩</h2><p class="clue">규칙: 기호 하나는 감정 하나. 스티커 ${S.traits.decode >= 2 ? 1 : 2}장이면 풀린다. 풀린 기호 ${solvedCount(S)}/${SYM_TOTAL}</p>
+      <table class="nb">${rows}<tr><td>미분류</td><td>${unk.join(' ') || '-'}</td></tr></table>`;
+  },
+  traits() {
+    const T = { decode: ['해독', '팬 글마다 문맥 단서 하나 더', '기호가 스티커 한 장으로 풀림'],
+      mimic: ['의태', '낮 성공 시 파츠 두 개', '의태 피로 증가 절반'],
+      empathy: ['공감', '팬 글 감정이 흐릿한 색으로 보임', '섬뜩이어도 의심도 그대로'] };
+    return back + `<h2>⭐ 특성 — 남은 포인트 ${S.points}</h2>` + Object.entries(T).map(([k, [n, l1, l2]]) =>
+      `<div class="card"><b>${n}</b> Lv${S.traits[k]}/2<br><span class="clue">1: ${l1}<br>2: ${l2}</span><br>
+        <button ${S.points && S.traits[k] < 2 ? '' : 'disabled'} onclick="S.points--;S.traits.${k}++;render()">올리기</button></div>`).join('');
+  },
+  ending() {
+    const [t, d] = ENDINGS[S.ending];
+    return `<div class="ending"><h2>${t}</h2><p>${d}</p><p class="clue">팔로워 ${S.followers} · 의심도 ${S.sus} · 풀린 기호 ${solvedCount(S)}/${SYM_TOTAL}</p>
+      <button onclick="S=newGame();go('home')">처음부터</button></div>`;
+  },
+};
+
+function render() {
+  if (S.ending) screen = 'ending';
+  if (screen === 'sns') POSTS[S.day - 1].forEach((p) => p.t.split(' ').forEach((w) => { if (SYM[w]) S.seen[w] = 1; }));
+  const head = screen === 'ending' ? '' : `<header><span>${S.day}/${BAL.DAYS}일 · ${S.phase === 'day' ? '낮' : '밤'}</span><span>👽 @kao_kao</span></header>`;
+  $.innerHTML = head + (msg ? `<div class="msg">${msg}</div>` : '') + screens[screen]();
+}
+
+function meet() {
+  const res = doEncounter(S, place, sel.eye, sel.mouth);
+  S.phase = 'night'; screen = 'home';
+  say(`${RES[res.r]}! (정답 감정: ${EMO[res.ans].n})\n${res.msgs.join('\n')}\n\n밤이 되었다.`);
+}
+function rest() { doRest(S); S.phase = 'night'; say('방에서 쉬었다. 의태 피로와 의심도가 내려갔다.\n\n밤이 되었다.'); }
+function upload() {
+  const r = doUpload(S, sel.eye, sel.mouth);
+  say(r.r ? `업로드 ${face(sel.eye, sel.mouth)} — ${RES[r.r]} (팔로워 ${r.f >= 0 ? '+' : ''}${r.f})` : `방 사진을 올렸다 (팔로워 +${r.f})`);
+}
+const FAN = { perfect: '팬: (꺄아아!!)', success: '팬: (좋아해 줬다)', creepy: '팬: (…무서운데 계속 보게 돼)', meh: '팬: (읽씹당한 기분)', wrong: '팬: (??? 뭐임)' };
+function reply(i) {
+  const r = doReply(S, i, sel.eye, sel.mouth);
+  say(`${FAN[r.r]}\n${RES[r.r]} · 팔로워 ${r.f >= 0 ? '+' : ''}${r.f}${r.newly.length ? `\n기호가 풀렸다: ${r.newly.join(' ')}` : ''}`);
+}
+function sleep() { endNight(S); screen = 'home'; say(S.ending ? '' : `특성 포인트 +1\n${S.day}일째 아침.`); }
+
+render();
+</script>
+</body>
+</html>
