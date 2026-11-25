@@ -240,8 +240,7 @@ namespace Kaomoji
             if (r == Result.Creepy && Traits[Trait.Empathy] >= 2) s = 0;
             if (post.Holdout)
             {
-                // 아직 글자를 쓰는 정상인에게 답하면: 주목받아 팔로워는 오르지만, 정체를 의심받는다
-                f = Math.Max(f, Balance.HoldoutFollowers);
+                // 아직 글자를 쓰는 정상인에게 답하면: 팔로워 판정은 똑같고, 의심만 크게 더 오른다
                 s += Balance.HoldoutSus;
             }
             if (post.Author == Doubter)

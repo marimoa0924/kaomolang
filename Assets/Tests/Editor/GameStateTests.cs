@@ -95,12 +95,12 @@ namespace Kaomoji.Tests
             Assert.AreEqual(1, s.Tonight.Count(p => p.Holdout)); // 밤마다 하나
             Assert.AreEqual(Balance.PostsPerNight, s.Tonight.Count);
 
-            // 정상인에게 답하면: 틀려도 팔로워는 오르고 의심은 크게 오른다
+            // 정상인에게 답하면: 팔로워 판정은 똑같고(시큰둥이면 변화 없음) 의심만 크게 오른다
             int idx = s.Tonight.FindIndex(p => p.Holdout);
             int f0 = s.Followers; float s0 = s.Sus;
             s.DoReply(idx, Emo.Neutral, Emo.Neutral);
-            Assert.Greater(s.Followers, f0);
-            Assert.GreaterOrEqual(s.Sus - s0, Balance.HoldoutSus);
+            Assert.AreEqual(f0, s.Followers);
+            Assert.AreEqual(Balance.HoldoutSus, s.Sus - s0, 0.01);
         }
 
         [Test]
