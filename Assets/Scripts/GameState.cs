@@ -1,4 +1,4 @@
-// 게임 규칙. Unity에 의존하지 않아 EditMode 테스트로 검증한다.
+// 게임 규칙 (스펙 v2). Unity에 의존하지 않아 EditMode 테스트로 검증한다.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,119 +6,212 @@ using static Kaomoji.GameData;
 
 namespace Kaomoji
 {
+    public class ReplyState
+    {
+        public Result? R; // null이면 보류
+        public string Face;
+        public bool Held => R == null;
+    }
+
     public class GameState
     {
         public int Day = 1, Followers, Points;
-        public float Sus, Fat;
-        public bool IsNight, Uploaded;
-        public string Went; // 장소 id, "room", 또는 null
+        public float Sus, Fat, FatMax = 100;
+        public bool BrokeDown, JustBrokeDown; // JustBrokeDown: 화면 연출용, 보여준 쪽이 끈다
+        public Slot Slot;
+        public bool IsNight => Slot == Slot.Night;
+        public bool Uploaded, HeldTonight;
+        public string Went; // 오늘 마지막으로 간 장소 id, 없으면 방
         public Ending Ending = Ending.None;
-        public readonly List<Emo> Eyes = new() { Emo.Neutral, Emo.Joy };
+
+        // 눈 여섯 개와 민짜 입으로 시작한다. 모으는 건 입 다섯 개와 장식뿐
+        public readonly List<Emo> Eyes = new() { Emo.Neutral, Emo.Joy, Emo.Sad, Emo.Anger, Emo.Surprise, Emo.Shy };
         public readonly List<Emo> Mouths = new() { Emo.Neutral };
+        public readonly List<Decor> Decors = new();
         public readonly Dictionary<string, int> Stickers = new(), Visits = new(), Aff = new();
-        public readonly HashSet<string> Seen = new();
+        public readonly HashSet<string> Seen = new(), FoundSynergies = new(), Hinted = new(), DoneOnce = new();
+        public readonly Dictionary<string, bool> RegularHappy = new(); // 단골이 지난 답장에 만족했는지
         public readonly Dictionary<Trait, int> Traits = new() { [Trait.Decode] = 0, [Trait.Mimic] = 0, [Trait.Empathy] = 0 };
-        public readonly (Result r, string face)?[] Replied = new (Result, string)?[3];
 
+        public List<Post> Tonight = new();
+        public ReplyState[] Replies = Array.Empty<ReplyState>();
+        Post heldPost;
+
+        public Encounter Pending; // 외출해서 지금 마주한 이벤트
+        string pendingPlace;
+        bool nightPointGiven;
         readonly Random rng;
-        public GameState(int? seed = null) { rng = seed.HasValue ? new Random(seed.Value) : new Random(); }
 
-        public static Result Judge(Emo eye, Emo mouth, Emo ans)
+        public GameState(int? seed = null)
         {
-            if (eye == ans) return mouth == ans ? Result.Perfect : mouth == Emo.Neutral ? Result.Success : Result.Creepy;
-            return eye == Emo.Neutral ? Result.Meh : Result.Wrong;
+            rng = seed.HasValue ? new Random(seed.Value) : new Random();
+            StartDay();
         }
 
-        public Post[] TodayPosts => Posts[Day - 1];
-        public bool NightDone => Uploaded && Replied.All(r => r.HasValue);
-        public bool Solved(string s) => Stickers.TryGetValue(s, out var n) && n >= (Traits[Trait.Decode] >= 2 ? 1 : 2);
-        public int SolvedCount => Sym.Keys.Count(Solved);
-        public Encounter NextEvent(string placeId) => PlaceById(placeId).Events[Math.Min(Visits.GetValueOrDefault(placeId), 1)];
+        // ---------- 판정 ----------
+
+        // 정답마다 판정해서 가장 좋은 것을 쓴다. 섬뜩을 원하는 팬에겐 섬뜩도 완벽.
+        public static Result Judge(Emo eye, Emo mouth, IEnumerable<Answer> answers, bool wantsCreepy = false)
+        {
+            var best = eye == Emo.Neutral ? Result.Meh : Result.Wrong;
+            foreach (var a in answers)
+            {
+                if (eye != a.Eye) continue;
+                var r = mouth == a.Mouth ? Result.Perfect : mouth == Emo.Neutral ? Result.Success : Result.Creepy;
+                if (r == Result.Creepy && wantsCreepy) r = Result.Perfect;
+                if (r < best) best = r;
+            }
+            return best;
+        }
+
+        public static Result Judge(Emo eye, Emo mouth, Emo ans) => Judge(eye, mouth, new[] { Pure(ans) });
+
+        // ---------- 수치 ----------
 
         void AddSus(float n)
         {
             Sus = Math.Clamp(Sus + n, 0, 100);
-            if (Sus >= 100) Ending = Ending.Found;
+            if (Sus >= 100 && Ending == Ending.None) Ending = Ending.Found;
         }
-        void AddFat(float n) => Fat = Math.Clamp(Fat + (n > 0 && Traits[Trait.Mimic] >= 2 ? n / 2 : n), 0, 100);
 
-        // 낮: 만남 이벤트 하나
-        // eye/mouth = 의태가 흔들린 뒤 실제로 지은 얼굴
-        public (Result r, Emo ans, List<string> msgs, Emo eye, Emo mouth) DoEncounter(string placeId, Emo eye, Emo mouth)
+        void AddFat(float n)
+        {
+            Fat = Math.Clamp(Fat + n, 0, FatMax);
+            if (Fat < FatMax || Ending != Ending.None) return;
+            if (BrokeDown) { Ending = Ending.Collapse; return; }
+            // 멘탈붕괴: 처음 100에 닿는 순간
+            BrokeDown = JustBrokeDown = true;
+            FatMax = Balance.FatMaxAfterBreakdown;
+            Fat += Balance.BreakdownFat;
+            AddSus(Traits[Trait.Mimic] >= 2 ? Balance.BreakdownSus / 2 : Balance.BreakdownSus);
+        }
+
+        void Advance() => Slot++;
+
+        // ---------- 낮 ----------
+
+        public Encounter PrepareOuting(string placeId)
         {
             var p = PlaceById(placeId);
-            var ev = NextEvent(placeId);
-            var msgs = new List<string>();
-            if (Fat >= Balance.FatShaky) // 의태가 흔들림: 눈이나 입 하나가 무작위로 바뀜
-            {
-                var planned = Face(eye, mouth);
-                bool swapEye = rng.Next(2) == 0;
-                if (swapEye) eye = Eyes[rng.Next(Eyes.Count)];
-                else mouth = Mouths[rng.Next(Mouths.Count)];
-                var now = Face(eye, mouth);
-                msgs.Add(now == planned
-                    ? "의태가 흔들렸지만 겨우 버텼다."
-                    : $"의태가 흔들렸다! {(swapEye ? "눈" : "입")}이 멋대로 바뀌었다: {planned} → {now}");
-            }
-            var r = Judge(eye, mouth, ev.Answer);
-            Visits[placeId] = Visits.GetValueOrDefault(placeId) + 1;
-            Went = placeId;
-            IsNight = true;
-            AddFat(Balance.FatOut);
-
-            if (r is Result.Perfect or Result.Success)
-            {
-                Aff[placeId] = Aff.GetValueOrDefault(placeId) + Balance.DayAff(r);
-                var order = new[] { ev.Teach }.Concat(p.Mood.Where(m => m != ev.Teach));
-                var missing = order.SelectMany(e => new[] { (eye: true, e), (eye: false, e) })
-                    .Where(x => !(x.eye ? Eyes : Mouths).Contains(x.e))
-                    .Take(Traits[Trait.Mimic] >= 1 ? 2 : 1).ToList();
-                foreach (var (isEye, e) in missing)
-                {
-                    (isEye ? Eyes : Mouths).Add(e);
-                    msgs.Add($"{p.Npc}의 얼굴을 의태했다 → {E[e].Name} {(isEye ? "눈 " + E[e].Eyes : "입 " + E[e].Mouth)} 획득");
-                }
-                if (missing.Count == 0) msgs.Add("더 배울 얼굴은 없었다.");
-            }
-            else if (r is Result.Creepy or Result.Wrong)
-            {
-                AddSus(Balance.DaySus(r));
-                msgs.Add(r == Result.Creepy ? "상대가 움찔한다. 주변 사람들이 수군댄다." : "상대가 어색하게 웃는다. 누군가 너를 빤히 본다.");
-            }
-            else msgs.Add("상대가 고개를 갸웃한다.");
-            return (r, ev.Answer, msgs, eye, mouth);
+            var extras = new[] { p.Passerby, p.Special }.Where(e => !DoneOnce.Contains(e.Id)).ToList();
+            Pending = extras.Count > 0 && rng.NextDouble() < Balance.ExtraEventChance
+                ? extras[rng.Next(extras.Count)]
+                : p.Story[Math.Min(Aff.GetValueOrDefault(placeId), 2)];
+            pendingPlace = placeId;
+            return Pending;
         }
 
-        public void DoRest()
+        // 만남: 상대 감정에 어울리는 눈이면 성공. 성공이든 실패든 상대의 반응 입을 얻는다
+        public (bool ok, Emo? mouth, Decor decor) DoEncounter(Emo eye)
         {
-            AddFat(Balance.RestFat);
-            AddSus(Balance.RestSus);
-            Went = "room";
-            IsNight = true;
+            var ev = Pending;
+            bool ok = ev.Fits.Contains(eye);
+            Visits[pendingPlace] = Visits.GetValueOrDefault(pendingPlace) + 1;
+            Went = pendingPlace;
+            Emo? got = null;
+            Decor decor = null;
+            if (ok)
+            {
+                if (ev.Kind == EvKind.Npc) Aff[pendingPlace] = Math.Min(3, Aff.GetValueOrDefault(pendingPlace) + 1);
+                if (ev.Decor != null) { decor = ev.Decor; Decors.Add(decor); DoneOnce.Add(ev.Id); }
+                else got = Gain(ev.WinMouth);
+            }
+            else
+            {
+                AddSus(Balance.DayFailSus);
+                got = Gain(ev.FailMouth);
+            }
+            if (ev.Kind == EvKind.Passerby) DoneOnce.Add(ev.Id);
+            Pending = null;
+            AddFat(Traits[Trait.Mimic] >= 1 ? Balance.FatOutMimic : Balance.FatOut);
+            Advance();
+            return (ok, got, decor);
         }
 
-        // 밤: 업로드. 방 사진이면 r == null
-        public (Result? r, int f) DoUpload(Emo eye, Emo mouth)
+        Emo? Gain(Emo m)
+        {
+            if (Mouths.Contains(m)) return null;
+            Mouths.Add(m);
+            return m;
+        }
+
+        // 거울 연습: 시너지 조합이면 이름을 수첩에 기록. isNew = 처음 찾음
+        public (Answer syn, bool isNew) DoMirror(Emo eye, Emo mouth)
+        {
+            AddFat(Balance.FatHome);
+            Advance();
+            var syn = SynergyOf(eye, mouth);
+            return (syn, syn != null && FoundSynergies.Add(syn.Name));
+        }
+
+        // 피드 구경: 오늘 밤 글 하나를 미리 보고 색 단서를 받는다
+        public int DoPeek()
+        {
+            AddFat(Balance.FatHome);
+            Advance();
+            int i = Tonight.FindIndex(p => !Hinted.Contains(p.Id));
+            if (i >= 0) Hinted.Add(Tonight[i].Id);
+            return i;
+        }
+
+        public void DoNap()
+        {
+            AddFat(Balance.FatNap);
+            AddSus(Balance.NapSus);
+            Advance();
+        }
+
+        // ---------- 밤 ----------
+
+        void StartDay()
+        {
+            Tonight = Posts[Day - 1].Select(p => p.Bad != null && p.Author != null && RegularHappy.TryGetValue(p.Author, out var ok) && !ok ? p.Bad : p).ToList();
+            if (heldPost != null) Tonight.Add(Followup(heldPost, Day));
+            heldPost = null;
+            Replies = new ReplyState[Tonight.Count];
+        }
+
+        public bool NightDone => Uploaded && Replies.All(r => r != null);
+        public bool Solved(string s) => Stickers.TryGetValue(s, out var n) && n >= (Traits[Trait.Decode] >= 2 ? 1 : 2);
+        public int SolvedCount => Sym.Keys.Count(Solved);
+
+        // 색 단서를 볼 수 있는지: 공감 1레벨이거나 피드 구경으로 미리 본 글
+        public bool ShowsColor(Post p) => p.Hint != Hint.None && (Traits[Trait.Empathy] >= 1 || Hinted.Contains(p.Id));
+
+        public (Result? r, int f) DoUpload(Emo eye, Emo mouth, Decor decor)
         {
             Uploaded = true;
-            if (Went == null || Went == "room") { Followers += Balance.RoomUpload; return (null, Balance.RoomUpload); }
-            var r = PlaceById(Went).Mood.Select(m => Judge(eye, mouth, m)).Min(); // enum 순서상 작을수록 좋은 판정
-            var (f, s) = Balance.Upload(r);
+            Result? r = null;
+            int f = Balance.RoomUpload;
+            float s = 0;
+            if (Went != null)
+            {
+                r = Judge(eye, mouth, PlaceById(Went).Mood);
+                (f, s) = Balance.Upload(r.Value);
+            }
+            if (decor != null) f += Balance.DecorBonus;
             Followers = Math.Max(0, Followers + f);
             AddSus(s);
             return (r, f);
         }
 
-        // 밤: 팬 글 답장. newly = 이번에 풀린 기호
-        public (Result r, int f, List<string> newly) DoReply(int idx, Emo eye, Emo mouth)
+        // newly = 이번에 풀린 기호, newSyn = 처음 찾은 시너지
+        public (Result r, int f, List<string> newly, Answer newSyn) DoReply(int idx, Emo eye, Emo mouth)
         {
-            var post = TodayPosts[idx];
-            var r = Judge(eye, mouth, post.Emotion);
+            var post = Tonight[idx];
+            var r = Judge(eye, mouth, post.Answers, post.WantsCreepy);
             var (f, s) = Balance.Reply(r);
+            if (post.WantsCreepy && r == Result.Perfect) s = 0;
             if (r == Result.Creepy && Traits[Trait.Empathy] >= 2) s = 0;
+            if (post.Author == Doubter)
+            {
+                if (r == Result.Wrong) s = Balance.DoubterWrongSus;
+                if (r == Result.Perfect) s = Balance.DoubterPerfectSus;
+            }
             Followers = Math.Max(0, Followers + f);
             AddSus(s);
             AddFat(Balance.FatReply);
+
             var newly = new List<string>();
             if (r is Result.Perfect or Result.Success)
                 foreach (var t in post.Text.Split(' ').Where(Sym.ContainsKey))
@@ -127,20 +220,34 @@ namespace Kaomoji
                     Stickers[t] = Stickers.GetValueOrDefault(t) + 1;
                     if (!was && Solved(t)) newly.Add(t);
                 }
-            Replied[idx] = (r, Face(eye, mouth));
-            return (r, f, newly);
+            var syn = SynergyOf(eye, mouth);
+            Answer newSyn = syn != null && FoundSynergies.Add(syn.Name) ? syn : null;
+            if (post.Author != null) RegularHappy[post.Author] = r is Result.Perfect or Result.Success;
+            Replies[idx] = new ReplyState { R = r, Face = Face(eye, mouth) };
+            return (r, f, newly, newSyn);
+        }
+
+        // 보류: 밤마다 한 글까지. 다음 밤 후속 글로 돌아온다
+        public bool CanHold => !HeldTonight;
+        public bool DoHold(int idx)
+        {
+            if (HeldTonight || Replies[idx] != null) return false;
+            HeldTonight = true;
+            heldPost = Tonight[idx];
+            if (heldPost.Author != null) RegularHappy[heldPost.Author] = false;
+            Replies[idx] = new ReplyState();
+            return true;
         }
 
         public void MarkSeen()
         {
-            foreach (var p in TodayPosts) foreach (var t in p.Text.Split(' ')) if (Sym.ContainsKey(t)) Seen.Add(t);
+            foreach (var p in Tonight) foreach (var t in p.Text.Split(' ')) if (Sym.ContainsKey(t)) Seen.Add(t);
         }
 
         public bool CanRaise(Trait t) => Points > 0 && Traits[t] < 2;
         public void Raise(Trait t) { if (!CanRaise(t)) return; Points--; Traits[t]++; }
 
         // 답장을 끝내면 특성 창이 열리기 전에 포인트를 준다. 두 번 불러도 한 번만.
-        bool nightPointGiven;
         public void GrantNightPoint()
         {
             if (nightPointGiven) return;
@@ -152,18 +259,24 @@ namespace Kaomoji
         {
             GrantNightPoint();
             nightPointGiven = false;
+            AddFat(Balance.FatSleep);
+            if (Ending != Ending.None) return;
             if (Day >= Balance.Days) { Ending = FinalEnding(); return; }
             Day++;
-            IsNight = false; Uploaded = false; Went = null;
-            Array.Clear(Replied, 0, Replied.Length);
+            Slot = Slot.Morning;
+            Uploaded = HeldTonight = false;
+            Went = null;
+            StartDay();
         }
 
         public Ending FinalEnding()
         {
             if (Sus >= 100) return Ending.Found;
             if (Followers >= Balance.FollowerGoal && Sus < Balance.ConquerSusMax) return Ending.Conquer;
-            if (SolvedCount >= Sym.Count * Balance.AbsorbRatio && Followers < Balance.FollowerGoal) return Ending.Absorb;
-            return Ending.Normal;
+            if (SolvedCount >= Balance.AbsorbSolved && Followers < Balance.FollowerGoal) return Ending.Absorb;
+            return Ending.Forgotten;
         }
+
+        public IEnumerable<string> EpilogueCuts => Places.Where(p => Aff.GetValueOrDefault(p.Id) >= 3).Select(p => Epilogue[p.Id]);
     }
 }
