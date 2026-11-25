@@ -422,7 +422,7 @@ namespace Kaomoji
             GUI.BringWindowToFront(97);
         }
 
-        const float CurtainIn = 0.4f, CurtainEndText = 1.2f, CurtainHold = CurtainEndText + LoadTime + 0.4f;
+        const float CurtainIn = 0.4f, CurtainEndText = 1.2f, CurtainHold = CurtainEndText + 1.2f; // 로딩 막대는 멘탈붕괴 재부팅에만
         bool CurtainDone => Time.time - curtainT > CurtainIn * 2 + CurtainHold;
 
         // 날이 지나갈 때: 막이 내려오고 N일차 종료 → N+1일차, 다시 올라간다
@@ -438,13 +438,8 @@ namespace Kaomoji
                 var big = new GUIStyle(roundStyle) { fontSize = 72, alignment = TextAnchor.MiddleCenter };
                 if (t < CurtainIn + CurtainEndText) { GUI.Label(new Rect(0, H / 2 - 60, W, 90), $"{curtainDay}일차 종료", big); return; }
                 if (S.Ending != Ending.None) { GUI.Label(new Rect(0, H / 2 - 60, W, 90), "…", big); return; }
-                // 재부팅 때와 같은 로딩 막대가 천천히 차오르고 다음 날
-                var dot = new GUIStyle(dotStyle) { fontSize = 40, alignment = TextAnchor.MiddleCenter };
-                int bars = Mathf.RoundToInt(Mathf.Clamp01((t - CurtainIn - CurtainEndText) / LoadTime) * 12);
-                GUI.Label(new Rect(0, H / 2 - 40, W, 50), "LOADING", dot);
-                GUI.Label(new Rect(0, H / 2 + 10, W, 40), new string('▒', bars) + new string('·', 12 - bars), dot);
-                GUI.Label(new Rect(0, H / 2 + 60, W, 50), $"{S.Day}일차", new GUIStyle(roundStyle) { fontSize = 44, alignment = TextAnchor.MiddleCenter });
-                GUI.Label(new Rect(0, H / 2 + 115, W, 36), $"♥ {S.Followers:#,0} / {Balance.FollowerGoal:#,0}", new GUIStyle(dotStyle) { fontSize = 24, alignment = TextAnchor.MiddleCenter });
+                GUI.Label(new Rect(0, H / 2 - 60, W, 90), $"{S.Day}일차", big);
+                GUI.Label(new Rect(0, H / 2 + 30, W, 40), $"♥ {S.Followers:#,0} / {Balance.FollowerGoal:#,0}", new GUIStyle(dotStyle) { fontSize = 32, alignment = TextAnchor.MiddleCenter });
             }, GUIContent.none, curtainStyle);
             GUI.BringWindowToFront(96);
         }
