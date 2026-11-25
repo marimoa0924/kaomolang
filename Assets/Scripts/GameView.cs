@@ -131,7 +131,7 @@ namespace Kaomoji
                 new("post_0", "팬의 글이다.\n■는 못 읽는 글자.", () => S.Replies[0] != null || PastDay1(), true),
                 new("sym_0", "이 기호에 감정이 담겨 있다.\n옆의 수첩과 비교해 보자.", () => S.Replies[0] != null || PastDay1(), true),
                 new("clue_0", "단서를 보자.\n케이크 사진이면…?", () => S.Replies[0] != null || PastDay1(), true),
-                new("reply_0", "[↩ 멘션 달기]를 누르고\n아래에서 얼굴을 만들어 [@ 보내기]!", () => S.Replies[0] != null || PastDay1()),
+                new("reply_0", "[@ 멘션 달기]를 누르고\n아래에서 얼굴을 만들어 [@ 보내기]!", () => S.Replies[0] != null || PastDay1()),
                 new("hold_1", "어려운 글은 [‖ 나중에].\n다음 밤에 서운해하며 돌아온다.", () => S.Replies[1] != null || PastDay1(), true),
                 new("feed", "남은 글에도 멘션을 달자.", () => S.Replies.All(r => r != null) || PastDay1()),
                 new("tab_post", "[▣ 내 게시물] 탭에서\n오늘 사진을 올리자.", () => snsTab == 0 || S.Uploaded || PastDay1()),
@@ -1022,7 +1022,7 @@ namespace Kaomoji
             if (rep == null)
             {
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button(target == i ? "↩ 멘션 쓰는 중…" : "↩ 멘션 달기", linkBtn, GUILayout.ExpandWidth(false)) && !blocked) target = i;
+                if (GUILayout.Button(target == i ? "@ 멘션 쓰는 중…" : "@ 멘션 달기", linkBtn, GUILayout.ExpandWidth(false)) && !blocked) target = i;
                 Mark($"reply_{i}");
                 if (S.CanHold) { if (GUILayout.Button("‖ 나중에", linkBtn, GUILayout.ExpandWidth(false)) && !blocked) pending = () => Hold(i); }
                 Mark($"hold_{i}");
