@@ -1115,6 +1115,7 @@ namespace Kaomoji
             GUILayout.BeginVertical(card, GUILayout.Height(330));
             var saved = origin;
             origin = saved + commentView.position - commentScroll; // 스크롤 안의 좌표를 창 좌표로
+            commentScroll.x = 0; // 가로 스크롤 없음
             commentScroll = GUILayout.BeginScrollView(commentScroll, false, false, GUIStyle.none, GUI.skin.verticalScrollbar, GUIStyle.none, GUILayout.Height(318));
             for (int i = 0; i < S.Tonight.Count; i++) Tweet(i);
             GUILayout.EndScrollView();
@@ -1133,35 +1134,37 @@ namespace Kaomoji
             int tinted = !color ? 0 : post.Hint == Hint.Full ? tokens.Length : tokens.Length / 2;
             var hue = post.Answers[0].Eye;
             GUILayout.Label($"{(post.Id.StartsWith("f") ? "→ " : "")}{Handle(post)}", new GUIStyle(dotStyle) { fontSize = 14 });
-            GUILayout.BeginHorizontal();
-            if (color) { GUILayout.Label($"{E[hue].Shape}?", chips[hue], GUILayout.ExpandWidth(false)); HoverEmo(hue); }
+            // 글 조각을 모아 두었다가 폭(maxW)을 넘으면 다음 줄로: 가로 스크롤이 생기지 않게
+            var items = new List<(string text, GUIStyle style, Action after)>();
+            if (color) items.Add(($"{E[hue].Shape}?", chips[hue], () => HoverEmo(hue)));
             // 팔로워가 늘수록 팬들도 카오모지로 말한다: 글 사이사이나 끝에, 정답과 상관없는 얼굴로
             int kao = FanKaomoji, seed = post.Id.Sum(ch => ch);
             var kaoAt = Enumerable.Range(0, kao).Select(n => (seed + n * 5) % (tokens.Length + 1)).ToList();
-            void KaoBefore(int k) { foreach (var n in Enumerable.Range(0, kao).Where(n => kaoAt[n] == k)) GUILayout.Label(FanFaces[(seed + n * 3) % FanFaces.Length], postStyle, GUILayout.ExpandWidth(false)); }
+            void KaoBefore(int k) { foreach (var n in Enumerable.Range(0, kao).Where(n => kaoAt[n] == k)) items.Add((FanFaces[(seed + n * 3) % FanFaces.Length], postStyle, null)); }
             bool firstSym = true;
             for (int k = 0; k < tokens.Length; k++)
             {
                 KaoBefore(k);
                 var t = tokens[k];
-                if (!Sym.TryGetValue(t, out var e))
-                {
-                    GUILayout.Label(t, k < tinted ? tintText[hue] : postStyle, GUILayout.ExpandWidth(false));
-                    if (k < tinted) HoverEmo(hue);
-                    continue;
-                }
-                if (S.Solved(t))
-                {
-                    GUILayout.Label(t, chips[e], GUILayout.ExpandWidth(false)); // 해독한 기호는 그 감각의 색으로만. 이름은 수첩에서
-                }
-                else
-                {
-                    GUILayout.Label(t, k < tinted ? tintText[hue] : symStyle, GUILayout.ExpandWidth(false));
-                }
-                HoverSym(t);
-                if (firstSym && i >= 0) { Mark($"sym_{i}"); firstSym = false; }
+                bool tint = k < tinted;
+                if (!Sym.TryGetValue(t, out var e)) { items.Add((t, tint ? tintText[hue] : postStyle, tint ? () => HoverEmo(hue) : null)); continue; }
+                bool mark = firstSym && i >= 0;
+                firstSym = false;
+                // 해독한 기호는 그 감각의 색으로만. 이름은 수첩에서
+                items.Add((t, S.Solved(t) ? chips[e] : tint ? tintText[hue] : symStyle, () => { HoverSym(t); if (mark) Mark($"sym_{i}"); }));
             }
             KaoBefore(tokens.Length);
+
+            float maxW = forceColor ? 360 : 520, x = 0;
+            GUILayout.BeginHorizontal();
+            foreach (var (text, style, after) in items)
+            {
+                float w = style.CalcSize(new GUIContent(text)).x + style.margin.horizontal;
+                if (x > 0 && x + w > maxW) { GUILayout.FlexibleSpace(); GUILayout.EndHorizontal(); GUILayout.BeginHorizontal(); x = 0; }
+                GUILayout.Label(text, style, GUILayout.ExpandWidth(false));
+                after?.Invoke();
+                x += w;
+            }
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
             if (S.Followers > 0) GUILayout.Label(Reveal(post), small);
