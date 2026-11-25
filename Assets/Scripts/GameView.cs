@@ -988,7 +988,7 @@ namespace Kaomoji
             GUILayout.BeginVertical(card, GUILayout.Height(330));
             var saved = origin;
             origin = saved + commentView.position - commentScroll; // 스크롤 안의 좌표를 창 좌표로
-            commentScroll = GUILayout.BeginScrollView(commentScroll, GUILayout.Height(318));
+            commentScroll = GUILayout.BeginScrollView(commentScroll, false, false, GUIStyle.none, GUI.skin.verticalScrollbar, GUIStyle.none, GUILayout.Height(318));
             for (int i = 0; i < S.Tonight.Count; i++) Tweet(i);
             GUILayout.EndScrollView();
             origin = saved;
@@ -1551,6 +1551,19 @@ namespace Kaomoji
         {
             if (btn != null) return;
             GUI.skin.font = body;
+            // 기본 스킨의 회색·검정 스크롤바를 팔레트 색으로 (검정은 글자와 기호만)
+            var track = new GUIStyle { fixedWidth = 12, border = new RectOffset(1, 1, 1, 1), margin = new RectOffset(4, 0, 0, 0) };
+            track.normal.background = Bevel(Pal.BarBg, Pal.BarBg, Pal.Line);
+            var thumb = new GUIStyle { fixedWidth = 12, border = new RectOffset(1, 1, 1, 1) };
+            thumb.normal.background = thumb.hover.background = thumb.active.background = Bevel(Pal.TitleA, Pal.Lightest, Pal.Line);
+            var noButton = new GUIStyle { fixedWidth = 0, fixedHeight = 0 };
+            GUI.skin.verticalScrollbar = track;
+            GUI.skin.verticalScrollbarThumb = thumb;
+            GUI.skin.verticalScrollbarUpButton = GUI.skin.verticalScrollbarDownButton = noButton;
+            GUI.skin.horizontalScrollbar = new GUIStyle(track) { fixedWidth = 0, fixedHeight = 12 };
+            GUI.skin.horizontalScrollbarThumb = new GUIStyle(thumb) { fixedWidth = 0, fixedHeight = 12 };
+            GUI.skin.horizontalScrollbarLeftButton = GUI.skin.horizontalScrollbarRightButton = noButton;
+            GUI.skin.scrollView = GUIStyle.none;
             GUIStyle Text(Font f, int size, FontStyle fs = FontStyle.Normal)
             {
                 var s = new GUIStyle { font = f, fontSize = size, richText = true, wordWrap = true, fontStyle = fs, padding = new RectOffset(2, 2, 2, 2), margin = new RectOffset(2, 2, 2, 2) };
