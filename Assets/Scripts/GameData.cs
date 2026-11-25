@@ -80,6 +80,7 @@ namespace Kaomoji
     public class Post
     {
         public string Id, Author, Text;
+        public string Plain; // 실제로 하는 말. 팔로워가 늘수록 주인공이 조금씩 읽게 된다
         public string[] Clues; // [0] 기본, [1] 해독 1레벨부터
         public Hint Hint;
         public Answer[] Answers;
@@ -266,6 +267,22 @@ namespace Kaomoji
             Text = $"■ {held.Text.Split(' ').First(Sym.ContainsKey)} ■■ ♯ ■ …?",
             Clues = new[] { "[반응] 서운함", "[시각] 답장 기다린 새벽" },
             Hint = Hint.Partial, Answers = new[] { Pure(Emo.Anger), Syn("삐짐") },
+            Plain = "왜 어제 답 안 해 줬어…?",
+        };
+
+        static readonly Dictionary<string, string> Plains = new()
+        {
+            ["d1p0"] = "오늘 생일이라 케이크 먹었어!!", ["d1p1"] = "비가 와서 하루 종일 우울해...", ["d1p2"] = "우리 강아지가 꼬리를 흔들어 줬어",
+            ["d2p0"] = "너 왜 매일 같은 시간에만 올려?", ["d2p1"] = "코코아 마시니까 조금 괜찮아졌어", ["d2p1b"] = "아무도 내 얘기 안 들어줘",
+            ["d2p2"] = "선물 받았다 너무 신나",
+            ["d3p0"] = "네 사진 벌써 백 장 모았어?!", ["d3p1"] = "손편지 받았는데 부끄러워..", ["d3p2"] = "폰 액정 또 깨졌어 진짜 짜증나!!",
+            ["d4p0"] = "확대해 보니까 눈이 이상한데?", ["d4p1"] = "화분에 다시 불 켜 봤어", ["d4p1b"] = "꽃이 다 시들었어",
+            ["d4p2"] = "친구가 상 받았대 축하해… 축하해",
+            ["d5p0"] = "방을 네 사진으로 다 채웠어!!!", ["d5p1"] = "셀카 올렸는데 심장이 터질 것 같아", ["d5p2"] = "영수증 보니 바가지였어!!",
+            ["d6p0"] = "정전된 날에도 글이 올라왔잖아?", ["d6p0b"] = "신고할 거야. 넌 사람이 아니야!!",
+            ["d6p1"] = "고양이가 무릎에 올라왔어..", ["d6p1b"] = "이사 가기 싫어", ["d6p2"] = "약속에 또 늦었어 흥",
+            ["d7p0"] = "네 얼굴 가면 만들었어 보여줄까", ["d7p1"] = "커플 머그컵 샀어 히히",
+            ["d7p2"] = "하늘에 이상한 빛이 떴어?!", ["d7p2b"] = "다 박제해 뒀어. 끝이야!!!",
         };
 
         static GameData()
@@ -274,7 +291,8 @@ namespace Kaomoji
                 for (int i = 0; i < Posts[d].Length; i++)
                 {
                     Posts[d][i].Id = $"d{d + 1}p{i}";
-                    if (Posts[d][i].Bad != null) Posts[d][i].Bad.Id = $"d{d + 1}p{i}b";
+                    Posts[d][i].Plain = Plains[Posts[d][i].Id];
+                    if (Posts[d][i].Bad != null) { Posts[d][i].Bad.Id = $"d{d + 1}p{i}b"; Posts[d][i].Bad.Plain = Plains[Posts[d][i].Bad.Id]; }
                 }
         }
 
