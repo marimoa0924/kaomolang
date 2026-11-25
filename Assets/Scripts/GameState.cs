@@ -105,10 +105,10 @@ namespace Kaomoji
         public Encounter PrepareOuting(string placeId)
         {
             var p = PlaceById(placeId);
-            var extras = new[] { p.Passerby, p.Special }.Where(e => !DoneOnce.Contains(e.Id)).ToList();
+            var extras = p.Passersby.Append(p.Special).Where(e => !DoneOnce.Contains(e.Id)).ToList();
             Pending = !NoExtras && extras.Count > 0 && rng.NextDouble() < Balance.ExtraEventChance
                 ? extras[rng.Next(extras.Count)]
-                : p.Story[Math.Min(Aff.GetValueOrDefault(placeId), 2)];
+                : p.Story[Math.Min(Aff.GetValueOrDefault(placeId), 2)][rng.Next(2)]; // 같은 단계라도 장면은 두 가지 중 하나
             PendingPlace = placeId;
             return Pending;
         }

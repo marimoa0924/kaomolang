@@ -68,6 +68,24 @@ namespace Kaomoji.Tests
         }
 
         [Test]
+        public void AllSuccessCollectsEveryMouthByDay5()
+        {
+            // 하루 한 번만 외출하고(나머지는 쉼) 장소를 돌며 모두 성공해도 5일차 안에 입 다섯 개가 모인다
+            var s = new GameState(5) { NoExtras = true };
+            string[] route = { "park", "station", "store", "cafe", "park" };
+            foreach (var place in route)
+            {
+                var ev = s.PrepareOuting(place);
+                Assert.IsTrue(s.DoEncounter(ev.Fits[0]).ok);
+                s.EndAction();
+                s.DoNap(); s.EndAction();
+                s.EndNight();
+            }
+            Assert.AreEqual(6, s.Mouths.Count);
+            Assert.LessOrEqual(s.Day, 6);
+        }
+
+        [Test]
         public void HeldPostReturnsAsFollowup()
         {
             var s = new GameState(1);

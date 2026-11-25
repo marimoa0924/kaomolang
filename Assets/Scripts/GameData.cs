@@ -76,8 +76,9 @@ namespace Kaomoji
         public string Id, Name, Npc, Icon;
         public string Photo; // 사진 속 장면. 아트 전까지 분위기를 추측할 단서
         public Emo Mood;
-        public Encounter[] Story; // 호감 0, 1, 2단계
-        public Encounter Passerby, Special;
+        public Encounter[][] Story;  // 호감 0, 1, 2단계 × 장면 두 가지
+        public Encounter[] Passersby; // 한 번씩만 만나는 사람들
+        public Encounter Special;
     }
 
     public class Post
@@ -158,6 +159,7 @@ namespace Kaomoji
             ["펫시터"] = "U・ｪ・U", ["분실물센터 역무원"] = "[・_・]", ["야간 알바생"] = "(-_-)", ["신입 바리스타"] = "(・_・)♨",
             ["벤치의 할머니"] = "(・o・)", ["막차를 놓친 회사원"] = "(・_・)〓", ["꼬마 손님"] = "(・.・)", ["첫 데이트 커플"] = "(・_・)(・_・)",
             ["길고양이"] = "=・ｪ・=", ["역 피아노"] = "♪♪♪", ["복권 손님"] = "(・∀・)",
+            ["연 날리던 아이"] = "(・ｪ・)", ["길 잃은 관광객"] = "(・o・)?", ["취한 아저씨"] = "(-∀-)", ["노트북 하는 학생"] = "(・_・)≡",
         };
 
         static Encounter Ev(string id, EvKind kind, string who, string sit, string say, Emo[] fits, Emo win, string winText, Emo fail, string failText, Decor decor = null) =>
@@ -165,61 +167,116 @@ namespace Kaomoji
 
         static Emo[] F(params Emo[] e) => e;
 
+        // 단계마다 장면이 두 가지(무작위). 반응 입(성공 시)은 장소마다 다르게 깔아서,
+        // 여러 장소를 돌며 다 성공하면 사나흘, 쉬어 가며 해도 5일차쯤엔 입 다섯 개가 모인다.
+        //   1단계: 공원 반짝 / 역 간질 / 편의점 따끔 / 카페 쿨,  2단계: 공원·역 축축 / 편의점 쿨 / 카페 간질,  3단계: 공원 간질 / 역 쿨 / 편의점·카페 반짝
         public static readonly Place[] Places =
         {
             new() { Id = "park", Photo = "꼬리 흔드는 강아지들, 햇살 아래 웃음소리", Icon = "♣", Name = "공원", Npc = "펫시터", Mood = Emo.Joy,
                 Story = new[] {
-                    Ev("park0", EvKind.Npc, "펫시터", "강아지 셋에게 끌려다니며 깔깔 웃는다.", "◁◆▽ ▣◈!",
-                        F(Emo.Joy), Emo.Joy, "같이 웃어 줬다고 더 활짝 웃는다.", Emo.Surprise, "네 얼굴을 보고 흠칫한다."),
-                    Ev("park1", EvKind.Npc, "펫시터", "강아지 하나가 곧 입양을 간다. 웃는데 눈가가 빨갛다.", "◆▽◁… ◁◆",
-                        F(Emo.Sad), Emo.Shy, "알아봐 줘서 쑥스럽게 웃는다.", Emo.Anger, "\"지금 웃을 일이에요?\" 하고 쏘아본다."),
-                    Ev("park2", EvKind.Npc, "펫시터", "입양 가는 날. 리드줄을 꼭 쥐고 있다.", "▽◆… ◈▣◁",
-                        F(Emo.Sad, Emo.Joy), Emo.Joy, "\"잘 가!\" 하고 웃으며 손을 흔든다.", Emo.Sad, "결국 주저앉아 운다."),
+                    new[] {
+                        Ev("park0a", EvKind.Npc, "펫시터", "강아지 셋에게 끌려다니며 깔깔 웃는다.", "◁◆▽ ▣◈!",
+                            F(Emo.Joy), Emo.Joy, "같이 웃어 줬다고 더 활짝 웃는다.", Emo.Surprise, "네 얼굴을 보고 흠칫한다."),
+                        Ev("park0b", EvKind.Npc, "펫시터", "강아지가 펫시터 모자를 물고 도망간다. 웃으며 쫓아간다.", "▽◁! ◆◆!",
+                            F(Emo.Joy, Emo.Surprise), Emo.Joy, "모자를 되찾고 헤헤 웃는다.", Emo.Anger, "\"웃을 일 아니거든요?\" 하고 째려본다.") },
+                    new[] {
+                        Ev("park1a", EvKind.Npc, "펫시터", "강아지 하나가 곧 입양을 간다. 웃는데 눈가가 빨갛다.", "◆▽◁… ◁◆",
+                            F(Emo.Sad), Emo.Sad, "\"보내기 싫어요…\" 입술을 삐죽이며 운다.", Emo.Anger, "\"지금 웃을 일이에요?\" 하고 쏘아본다."),
+                        Ev("park1b", EvKind.Npc, "펫시터", "강아지에게 오늘이 마지막 산책이라고 속삭인다.", "◁… ◆▽…",
+                            F(Emo.Sad), Emo.Sad, "강아지를 꼭 안고 훌쩍인다.", Emo.Surprise, "네 표정에 놀라 리드줄을 놓칠 뻔한다.") },
+                    new[] {
+                        Ev("park2a", EvKind.Npc, "펫시터", "입양 가는 날. 리드줄을 꼭 쥐고 있다.", "▽◆… ◈▣◁",
+                            F(Emo.Sad, Emo.Joy), Emo.Shy, "\"같이 있어 줘서 고마워요.\" 쑥스럽게 웃는다.", Emo.Anger, "\"가 주세요.\" 하고 등을 돌린다."),
+                        Ev("park2b", EvKind.Npc, "펫시터", "새 주인이 보낸 사진을 보여 준다. 강아지가 잘 지낸다.", "◈▽! ◁◆♪",
+                            F(Emo.Joy), Emo.Shy, "\"저 좀 울 뻔했어요.\" 귀가 빨개진다.", Emo.Surprise, "사진을 얼른 감춘다.") },
                 },
-                Passerby = Ev("parkP", EvKind.Passerby, "벤치의 할머니", "비둘기에게 빵을 통째로 뺏겼다.", "▣?! ◁◁!",
-                    F(Emo.Surprise, Emo.Anger), Emo.Joy, "\"그치, 어이없지?\" 하고 웃는다.", Emo.Sad, "혼자 머쓱해한다."),
+                Passersby = new[] {
+                    Ev("parkP1", EvKind.Passerby, "벤치의 할머니", "비둘기에게 빵을 통째로 뺏겼다.", "▣?! ◁◁!",
+                        F(Emo.Surprise, Emo.Anger), Emo.Joy, "\"그치, 어이없지?\" 하고 웃는다.", Emo.Anger, "\"뭘 봐요?\" 하고 쏘아본다."),
+                    Ev("parkP2", EvKind.Passerby, "연 날리던 아이", "연이 나무에 걸렸다. 아이가 울먹인다.", "◇… ◇◇…",
+                        F(Emo.Sad), Emo.Shy, "\"…괜찮아요.\" 눈물을 닦고 배시시 웃는다.", Emo.Anger, "\"뭘 봐!\" 하고 소리친다."),
+                },
                 Special = Ev("parkS", EvKind.Special, "길고양이", "덤불에서 길고양이가 너를 노려본다.", "냐…",
                     F(Emo.Surprise), Emo.Joy, "고양이가 네 손에 앞발을 올렸다!", Emo.Anger, "하악 하고 도망갔다.", Paw) },
 
             new() { Id = "station", Photo = "비 젖은 승강장, 주인 없는 곰인형", Icon = "〓", Name = "지하철역", Npc = "분실물센터 역무원", Mood = Emo.Sad,
                 Story = new[] {
-                    Ev("station0", EvKind.Npc, "분실물센터 역무원", "주인 없는 곰인형을 보며 울고 있다.", "◇▤◈ ▽◆…",
-                        F(Emo.Sad), Emo.Joy, "위로받고 살짝 웃는다.", Emo.Surprise, "네 얼굴에 경악한다."),
-                    Ev("station1", EvKind.Npc, "분실물센터 역무원", "인형이 여기 온 지 10년째라고 한다. 먼지를 털어 준다.", "◇▤… ▥◈▣",
-                        F(Emo.Sad), Emo.Shy, "\"이상하죠, 인형한테 정이 들어서.\" 쑥스러워한다.", Emo.Anger, "\"비웃는 거예요?\" 날이 선다."),
-                    Ev("station2", EvKind.Npc, "분실물센터 역무원", "인형 주인에게서 편지가 왔다! 펄쩍 뛴다.", "▥!! ◈▣◇!",
-                        F(Emo.Surprise, Emo.Joy), Emo.Joy, "편지를 흔들며 같이 기뻐한다.", Emo.Sad, "\"안 기뻐요?\" 시무룩해진다."),
+                    new[] {
+                        Ev("station0a", EvKind.Npc, "분실물센터 역무원", "주인 없는 곰인형을 보며 울고 있다.", "◇▤◈ ▽◆…",
+                            F(Emo.Sad), Emo.Shy, "위로받고 머쓱하게 웃는다.", Emo.Surprise, "네 얼굴에 경악한다."),
+                        Ev("station0b", EvKind.Npc, "분실물센터 역무원", "분실물 장부를 넘기다 한숨을 쉰다. 10년째 그대로인 칸이 있다.", "◇▤… ▥◈▣",
+                            F(Emo.Sad), Emo.Shy, "\"이상하죠, 물건한테 정이 들어서.\" 쑥스러워한다.", Emo.Anger, "\"놀리는 거예요?\" 날이 선다.") },
+                    new[] {
+                        Ev("station1a", EvKind.Npc, "분실물센터 역무원", "곰인형의 귀가 터졌다. 바늘을 들고 쩔쩔맨다.", "▥!? ◇▤…",
+                            F(Emo.Sad, Emo.Surprise), Emo.Sad, "\"제가 망친 것 같아요…\" 울먹인다.", Emo.Anger, "\"보지 마세요!\" 바늘을 내려놓는다."),
+                        Ev("station1b", EvKind.Npc, "분실물센터 역무원", "곰인형 주인을 찾는 전단을 붙인다. 아무도 보지 않는다.", "◇… ◇▤◈",
+                            F(Emo.Sad), Emo.Sad, "전단을 쓰다듬으며 눈물을 훔친다.", Emo.Surprise, "\"…왜 그런 얼굴이에요?\" 놀란다.") },
+                    new[] {
+                        Ev("station2a", EvKind.Npc, "분실물센터 역무원", "인형 주인에게서 편지가 왔다! 펄쩍 뛴다.", "▥!! ◈▣◇!",
+                            F(Emo.Surprise, Emo.Joy), Emo.Surprise, "입을 떡 벌리고 편지를 흔든다.", Emo.Anger, "\"안 기뻐요?\" 정색한다."),
+                        Ev("station2b", EvKind.Npc, "분실물센터 역무원", "백발의 할아버지가 곰인형 앞에 멈춰 섰다. 역무원의 손이 떨린다.", "◈…!? ▥▥",
+                            F(Emo.Surprise), Emo.Surprise, "\"설마… 설마!\" 숨을 들이켠다.", Emo.Anger, "\"방해하지 마세요.\" 쏘아붙인다.") },
                 },
-                Passerby = Ev("stationP", EvKind.Passerby, "막차를 놓친 회사원", "막차가 떠났다. 그대로 주저앉았다.", "◇… ◇…",
-                    F(Emo.Sad), Emo.Shy, "\"…고마워요.\" 고개를 숙인다.", Emo.Anger, "\"구경났어요?\" 하고 쏘아붙인다."),
+                Passersby = new[] {
+                    Ev("stationP1", EvKind.Passerby, "막차를 놓친 회사원", "막차가 떠났다. 그대로 주저앉았다.", "◇… ◇…",
+                        F(Emo.Sad), Emo.Shy, "\"…고마워요.\" 고개를 숙인다.", Emo.Anger, "\"구경났어요?\" 하고 쏘아붙인다."),
+                    Ev("stationP2", EvKind.Passerby, "길 잃은 관광객", "지도를 거꾸로 들고 두리번거린다.", "??? ▣◁?",
+                        F(Emo.Surprise), Emo.Joy, "\"땡큐!\" 하고 활짝 웃는다.", Emo.Surprise, "\"…?\" 뒷걸음친다."),
+                },
                 Special = Ev("stationS", EvKind.Special, "역 피아노", "누군가 역 피아노로 슬픈 곡을 친다. 모두 멈춰 섰다.", "♩… ♪…",
                     F(Emo.Sad), Emo.Sad, "너도 모르게 눈물방울이 맺혔다.", Emo.Surprise, "연주자가 너를 보고 손을 멈췄다.", Tear) },
 
             new() { Id = "store", Photo = "새벽 3시, 진상 손님이 엎지른 컵라면", Icon = "24", Name = "편의점", Npc = "야간 알바생", Mood = Emo.Anger,
                 Story = new[] {
-                    Ev("store0", EvKind.Npc, "야간 알바생", "진상 손님이 소리치고 나갔다. 알바생이 이를 간다.", "▨◁▣!! ◇▦▤!",
-                        F(Emo.Anger), Emo.Joy, "같이 화내 줘서 피식 웃는다.", Emo.Anger, "\"손님까지 왜 그래요.\""),
-                    Ev("store1", EvKind.Npc, "야간 알바생", "몰래 컵라면을 먹다가 너한테 들켰다.", "▩!? ◆▧…",
-                        F(Emo.Surprise, Emo.Joy), Emo.Shy, "\"비밀이에요.\" 하고 귀가 빨개진다.", Emo.Anger, "\"신고하게요?\" 경계한다."),
-                    Ev("store2", EvKind.Npc, "야간 알바생", "\"손님이 유일한 단골이에요.\" 폐기 삼각김밥을 내민다.", "▨◇▣▣… ▦~",
-                        F(Emo.Joy, Emo.Shy), Emo.Joy, "처음으로 환하게 웃는다.", Emo.Sad, "머쓱하게 김밥을 거둔다."),
+                    new[] {
+                        Ev("store0a", EvKind.Npc, "야간 알바생", "진상 손님이 소리치고 나갔다. 알바생이 이를 간다.", "▨◁▣!! ◇▦▤!",
+                            F(Emo.Anger), Emo.Anger, "\"그쵸? 진짜 너무하죠!\" 같이 씩씩댄다.", Emo.Surprise, "\"손님까지 왜 그래요?\" 놀란다."),
+                        Ev("store0b", EvKind.Npc, "야간 알바생", "누가 컵라면 국물을 진열대에 쏟고 갔다.", "▨!! ▦▤▨!",
+                            F(Emo.Anger, Emo.Surprise), Emo.Anger, "걸레를 쥐고 같이 투덜댄다.", Emo.Surprise, "네 표정에 걸레를 떨어뜨린다.") },
+                    new[] {
+                        Ev("store1a", EvKind.Npc, "야간 알바생", "몰래 컵라면을 먹다가 너한테 들켰다.", "▩!? ◆▧…",
+                            F(Emo.Surprise, Emo.Joy), Emo.Surprise, "\"헉, 비밀이에요!\" 젓가락을 문 채 굳는다.", Emo.Anger, "\"신고하게요?\" 경계한다."),
+                        Ev("store1b", EvKind.Npc, "야간 알바생", "새벽 4시, 정전이다. 알바생이 손전등을 켠다.", "▩?! …▧",
+                            F(Emo.Surprise), Emo.Surprise, "\"깜짝이야!\" 손전등으로 너를 비춘다.", Emo.Anger, "\"장난치지 마요!\" 화를 낸다.") },
+                    new[] {
+                        Ev("store2a", EvKind.Npc, "야간 알바생", "\"손님이 유일한 단골이에요.\" 폐기 삼각김밥을 내민다.", "▨◇▣▣… ▦~",
+                            F(Emo.Joy, Emo.Shy), Emo.Joy, "처음으로 환하게 웃는다.", Emo.Anger, "머쓱하게 김밥을 거둔다. 표정이 굳는다."),
+                        Ev("store2b", EvKind.Npc, "야간 알바생", "정직원 면접에 붙었다며 영수증 뒷면에 쓴 합격 문자를 보여 준다.", "▩!! ▨◇▣!",
+                            F(Emo.Joy, Emo.Surprise), Emo.Joy, "\"축하해 줘서 고마워요!\" 활짝 웃는다.", Emo.Anger, "\"…축하 안 해 줘요?\" 뾰로통해진다.") },
                 },
-                Passerby = Ev("storeP", EvKind.Passerby, "꼬마 손님", "동전을 세다가 모자라서 울상이다.", "◇◇… ▽?",
-                    F(Emo.Sad, Emo.Surprise), Emo.Joy, "알바생이 몰래 깎아 주자 활짝 웃는다.", Emo.Sad, "엉엉 울기 시작한다."),
+                Passersby = new[] {
+                    Ev("storeP1", EvKind.Passerby, "꼬마 손님", "동전을 세다가 모자라서 울상이다.", "◇◇… ▽?",
+                        F(Emo.Sad, Emo.Surprise), Emo.Joy, "알바생이 몰래 깎아 주자 활짝 웃는다.", Emo.Anger, "\"뭘 봐요!\" 하고 휙 돌아선다."),
+                    Ev("storeP2", EvKind.Passerby, "취한 아저씨", "아저씨가 계산대 앞에서 노래를 부른다.", "♩♩~ ▽▽~",
+                        F(Emo.Surprise, Emo.Joy), Emo.Joy, "\"같이 불러요!\" 하고 껄껄 웃는다.", Emo.Anger, "\"뭐야, 기분 나쁘게.\""),
+                },
                 Special = Ev("storeS", EvKind.Special, "복권 손님", "새벽 3시, 1등 당첨 복권이 나왔다! 다들 소리를 지른다.", "▩!!! ▩!!!",
                     F(Emo.Joy, Emo.Surprise), Emo.Joy, "다 같이 만세를 불렀다!", Emo.Surprise, "모두 너를 이상하게 쳐다본다.", Hooray) },
 
             new() { Id = "cafe", Photo = "하트가 되다 만 라떼, 빨개진 볼", Icon = "♨", Name = "카페", Npc = "신입 바리스타", Mood = Emo.Shy,
                 Story = new[] {
-                    Ev("cafe0", EvKind.Npc, "신입 바리스타", "라떼아트 하트가 감자가 됐다. 얼굴이 빨갛다.", "▨◇▣▣▦~",
-                        F(Emo.Shy, Emo.Joy), Emo.Joy, "\"다음엔 진짜 하트!\" 하고 웃는다.", Emo.Surprise, "잔을 떨어뜨릴 뻔한다."),
-                    Ev("cafe1", EvKind.Npc, "신입 바리스타", "대회 연습 중. 손이 떨려 우유를 쏟았다.", "▥◈… ◆▣▤!",
-                        F(Emo.Surprise, Emo.Sad), Emo.Shy, "\"보셨어요…?\" 쑥스럽게 닦는다.", Emo.Anger, "\"웃지 마세요!\" 발끈한다."),
-                    Ev("cafe2", EvKind.Npc, "신입 바리스타", "대회 전날. \"보러 와 줄래요?\"", "▥◈◆▣▤… ◁▤▨?",
-                        F(Emo.Shy, Emo.Joy), Emo.Shy, "고개를 푹 숙이고 웃는다.", Emo.Sad, "\"바쁘시구나…\""),
+                    new[] {
+                        Ev("cafe0a", EvKind.Npc, "신입 바리스타", "라떼아트 하트가 감자가 됐다. 얼굴이 빨갛다.", "▨◇▣▣▦~",
+                            F(Emo.Shy, Emo.Joy), Emo.Surprise, "\"어? 귀엽대요?\" 눈이 휘둥그레진다.", Emo.Anger, "\"놀리지 마세요!\" 발끈한다."),
+                        Ev("cafe0b", EvKind.Npc, "신입 바리스타", "처음 보는 너에게 시럽을 세 번이나 넣었다.", "▨!? ◇◇◇",
+                            F(Emo.Shy, Emo.Surprise), Emo.Surprise, "\"헉, 죄송해요!\" 입을 틀어막는다.", Emo.Anger, "\"그냥 드세요!\" 볼이 부푼다.") },
+                    new[] {
+                        Ev("cafe1a", EvKind.Npc, "신입 바리스타", "대회 연습 중. 손이 떨려 우유를 쏟았다.", "▥◈… ◆▣▤!",
+                            F(Emo.Surprise, Emo.Sad), Emo.Shy, "\"보셨어요…?\" 쑥스럽게 닦는다.", Emo.Anger, "\"웃지 마세요!\" 발끈한다."),
+                        Ev("cafe1b", EvKind.Npc, "신입 바리스타", "연습한 하트를 너에게 먼저 보여 준다. 반쯤 하트다.", "▨♡? ◇▣",
+                            F(Emo.Shy, Emo.Joy), Emo.Shy, "\"다음엔 완벽하게 할게요.\" 고개를 숙인다.", Emo.Surprise, "\"별로예요?\" 놀라 잔을 거둔다.") },
+                    new[] {
+                        Ev("cafe2a", EvKind.Npc, "신입 바리스타", "대회 전날. \"보러 와 줄래요?\"", "▥◈◆▣▤… ◁▤▨?",
+                            F(Emo.Shy, Emo.Joy), Emo.Joy, "\"꼭이에요!\" 환하게 웃는다.", Emo.Anger, "\"바쁘시구나.\" 입술을 깨문다."),
+                        Ev("cafe2b", EvKind.Npc, "신입 바리스타", "대회에서 은상을 탔다! 트로피를 들고 뛰어온다.", "▩!! ▨♡!!",
+                            F(Emo.Joy, Emo.Surprise), Emo.Joy, "트로피를 흔들며 방방 뛴다.", Emo.Anger, "\"…기쁜 거 맞아요?\" 정색한다.") },
                 },
-                Passerby = Ev("cafeP", EvKind.Passerby, "첫 데이트 커플", "서로 눈을 못 마주치고 빨대만 문다.", "…♡ …♡",
-                    F(Emo.Shy), Emo.Shy, "둘이 동시에 웃음이 터진다.", Emo.Surprise, "커플이 너를 보고 굳었다."),
+                Passersby = new[] {
+                    Ev("cafeP1", EvKind.Passerby, "첫 데이트 커플", "서로 눈을 못 마주치고 빨대만 문다.", "…♡ …♡",
+                        F(Emo.Shy), Emo.Shy, "둘이 동시에 웃음이 터진다.", Emo.Surprise, "커플이 너를 보고 굳었다."),
+                    Ev("cafeP2", EvKind.Passerby, "노트북 하는 학생", "마감 직전인지 키보드를 부술 듯 친다.", "▨▨▨!! ▩!",
+                        F(Emo.Anger, Emo.Surprise), Emo.Anger, "\"교수님 진짜…!\" 같이 분노해 준다.", Emo.Surprise, "깜짝 놀라 저장을 안 누른다."),
+                },
                 Special = Ev("cafeS", EvKind.Special, "신입 바리스타", "바리스타가 라떼를 내민다. 이번엔 진짜 하트다.", "▨♡!",
                     F(Emo.Shy, Emo.Joy), Emo.Joy, "하트를 따라 그렸다!", Emo.Sad, "하트가 금세 무너졌다.", Heart) },
         };
