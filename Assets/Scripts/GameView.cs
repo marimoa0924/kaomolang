@@ -984,6 +984,7 @@ namespace Kaomoji
         string uploadFace;
         int uploadGain, likeTarget;
         readonly List<(string glyph, string color, string text)> postComments = new();
+        Vector2 postScroll;
         Vector2 commentScroll;
         Rect commentView;
         readonly HashSet<string> knownMood = new(); // 올려서 반응이 좋았던 장소는 사진 분위기 칩이 보인다
@@ -1043,7 +1044,7 @@ namespace Kaomoji
         // [내 게시물]: 프로필, 오늘 간 곳 사진(장면 설명), 그 위에 붙는 카오모지, 좋아요
         void MyPost()
         {
-            GUILayout.BeginVertical(card, GUILayout.Height(330));
+            GUILayout.BeginVertical(card, GUILayout.Height(S.Uploaded ? 470 : 330));
             GUILayout.BeginHorizontal();
             Avatar("ψ", Pal.Hot);
             GUILayout.Label(MyHandle, new GUIStyle(dotStyle) { alignment = TextAnchor.MiddleLeft }, GUILayout.Height(34));
@@ -1077,7 +1078,10 @@ namespace Kaomoji
             GUILayout.Space(4);
             // 올린 뒤에는 팬들의 댓글이 하나씩 달린다 (깨진 글)
             if (S.Uploaded)
-                for (int k = 0; k < postComments.Count && Time.time - uploadT > 0.8f + k * 0.6f; k++)
+            {
+                GUILayout.Label($"댓글 {postComments.Count}", small);
+                postScroll = GUILayout.BeginScrollView(postScroll, false, false, GUIStyle.none, GUI.skin.verticalScrollbar, GUIStyle.none, GUILayout.Height(200));
+                for (int k = 0; k < postComments.Count && Time.time - uploadT > 0.8f + k * 0.35f; k++)
                 {
                     var (g, c, text) = postComments[k];
                     GUILayout.BeginHorizontal();
@@ -1087,6 +1091,8 @@ namespace Kaomoji
                     GUILayout.EndHorizontal();
                     GUILayout.Space(4);
                 }
+                GUILayout.EndScrollView();
+            }
             GUILayout.EndVertical();
             Mark("upload");
         }
@@ -1278,17 +1284,22 @@ namespace Kaomoji
             // 좋아요는 팔로워 수에 비례, 반응이 좋을수록 많이. 댓글도 그만큼 달린다
             float factor = r switch { Result.Perfect => 0.5f, Result.Success => 0.35f, Result.Creepy => 0.6f, Result.Meh => 0.1f, Result.Wrong => 0.03f, _ => 0.08f };
             likeTarget = Mathf.RoundToInt(Mathf.Max(30, S.Followers) * factor) + (decor != null ? 999 : 0);
-            postComments.Clear();
-            int n = r switch { Result.Perfect => 4, Result.Success => 3, Result.Creepy => 3, Result.Wrong => 2, _ => 1 };
+            postComments.Clear(); postScroll = Vector2.zero;
+            int baseN = r switch { Result.Perfect => 5, Result.Success => 4, Result.Creepy => 4, Result.Wrong => 3, Result.Meh => 2, _ => 2 };
+            int n = Mathf.Min(12, baseN + S.Followers / 800); // 팔로워가 늘수록 댓글도 늘어난다
             string[] lines = r switch
             {
-                Result.Perfect or Result.Success => new[] { "너무 귀여워", "오늘도 최고야", "이 표정 뭐야ㅋㅋ", "저장했어" },
-                Result.Creepy => new[] { "왜 무섭지…", "표정이 이상해", "근데 계속 보게 돼" },
-                Result.Wrong => new[] { "분위기랑 안 맞아", "??" },
-                _ => new[] { "음" },
+                Result.Perfect or Result.Success => new[] { "너무 귀여워", "오늘도 최고야", "이 표정 뭐야ㅋㅋ", "저장했어", "매일 올려 줘", "나만 알고 싶은 계정",
+                    "여기 어디야?", "사진 분위기 미쳤다", "프사로 해도 돼?", "알림 설정했어", "얼굴 보고 힘 났어", "오늘 하루 이걸로 버틴다" },
+                Result.Creepy => new[] { "왜 무섭지…", "표정이 이상해", "근데 계속 보게 돼", "새벽에 보면 안 될 듯", "이거 합성이야?", "눈이 웃는데 입이…",
+                    "소름 돋았어", "중독성 있어", "캡처해 둠" },
+                Result.Wrong => new[] { "분위기랑 안 맞아", "??", "무슨 표정이야", "사진이랑 따로 노네", "오늘 컨디션 별로야?", "언팔할까…" },
+                Result.Meh => new[] { "음", "그냥 그렇네", "무표정이네", "오늘은 조용하다" },
+                _ => new[] { "방 깨끗하네", "오늘은 집콕?", "쉬는 날이구나", "방 구경 좋아", "이불 귀엽다" },
             };
+            int pick = S.Day * 7;
             for (int k = 0; k < n; k++)
-                postComments.Add(("♣♠§∞‡"[(k + S.Day) % 5].ToString(), new[] { Pal.BtnFace, Pal.Bubble, Pal.TitleA, Pal.Gray }[k % 4], FanKaomoji > 0 ? $"{lines[k % lines.Length]} {FanFaces[(k + S.Day) % FanFaces.Length]}" : lines[k % lines.Length]));
+                postComments.Add(("♣♠§∞‡"[(k + S.Day) % 5].ToString(), new[] { Pal.BtnFace, Pal.Bubble, Pal.TitleA, Pal.Gray }[k % 4], FanKaomoji > 0 && k % 2 == 0 ? $"{lines[(pick + k) % lines.Length]} {FanFaces[(k + S.Day) % FanFaces.Length]}" : lines[(pick + k) % lines.Length]));
             diary.Add(new Sticker($"↑{face}", Pal.Bubble));
             AfterNightAction();
         }
