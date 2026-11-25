@@ -445,14 +445,17 @@ namespace Kaomoji
         }
 
         // 멘탈붕괴 셧다운: 폭주(흔들림·잡음·에러 폭탄) → 브라운관처럼 꺼짐 → 정지 화면 → 재부팅 → 다음 날
-        const float ShutRiot = 1.0f, ShutOff = 1.7f, ShutHalt = 2.8f, ShutBoot = 4.2f, ShutEnd = 7.0f, LoadTime = 2.4f;
+        // 멘탈붕괴 → 경고문(SYSTEM HALT) → 재부팅(느린 로딩) → 평소처럼 N일차 → 막이 걷힌다
+        const float ShutRiot = 1.0f, ShutOff = 1.7f, ShutHalt = 2.8f, ShutBoot = 4.6f, LoadTime = 4.0f,
+            ShutDay = ShutBoot + LoadTime, ShutLift = ShutDay + 1.4f, ShutEnd = ShutLift + 0.4f;
         bool ShutDone => Time.time - shutT > ShutEnd;
 
         void DrawShutdown()
         {
             float t = Time.time - shutT;
             if (ShutDone) return;
-            GUI.Window(95, new Rect(-Bezel, -Bezel, VW + Bezel * 2, VH + Bezel * 2), _ =>
+            float lift = t > ShutLift ? 1 - (t - ShutLift) / (ShutEnd - ShutLift) : 1; // 마지막엔 막처럼 위로 걷힌다
+            GUI.Window(95, new Rect(-Bezel, -Bezel, VW + Bezel * 2, (VH + Bezel * 2) * lift), _ =>
             {
                 float W = VW + Bezel * 2, H = VH + Bezel * 2;
                 var cover = Tex(Pal.Bezel);
@@ -487,12 +490,20 @@ namespace Kaomoji
                     GUI.Label(new Rect(0, H / 2 + 60, W, 30), Glitch("MIMIC.EXE NOT RESPONDING", 0.3f), new GUIStyle(dotStyle) { fontSize = 18, alignment = TextAnchor.MiddleCenter });
                     return;
                 }
-                // 재부팅: 막대가 차오르고 막이 걷힌다
-                float b = Mathf.Clamp01((t - ShutBoot) / LoadTime);
-                int bars = Mathf.RoundToInt(b * 12);
-                GUI.Label(new Rect(0, H / 2 - 40, W, 50), "REBOOT", big);
-                GUI.Label(new Rect(0, H / 2 + 10, W, 40), new string('▒', bars) + new string('·', 12 - bars), big);
-                GUI.Label(new Rect(0, H / 2 + 60, W, 40), $"{S.Day}일차", new GUIStyle(roundStyle) { fontSize = 44, alignment = TextAnchor.MiddleCenter });
+                if (t < ShutDay)
+                {
+                    // 재부팅: 막대가 천천히, 가끔 멈칫하며 차오른다
+                    float b = Mathf.Clamp01((t - ShutBoot) / LoadTime);
+                    b = b < 0.4f ? b : b < 0.6f ? 0.4f + (b - 0.4f) * 0.25f : 0.45f + (b - 0.6f) * 1.375f;
+                    int bars = Mathf.RoundToInt(b * 16);
+                    GUI.Label(new Rect(0, H / 2 - 40, W, 50), "REBOOT", big);
+                    GUI.Label(new Rect(0, H / 2 + 10, W, 40), new string('▒', bars) + new string('·', 16 - bars), big);
+                    return;
+                }
+                // 평소 날 넘김처럼 N일차
+                GUI.Label(new Rect(0, H / 2 - 60, W, 90), S.Ending != Ending.None ? "…" : $"{S.Day}일차", new GUIStyle(roundStyle) { fontSize = 72, alignment = TextAnchor.MiddleCenter });
+                if (S.Ending == Ending.None)
+                    GUI.Label(new Rect(0, H / 2 + 30, W, 40), $"♥ {S.Followers:#,0} / {Balance.FollowerGoal:#,0}", new GUIStyle(dotStyle) { fontSize = 32, alignment = TextAnchor.MiddleCenter });
             }, GUIContent.none, GUIStyle.none);
             GUI.BringWindowToFront(95);
         }
