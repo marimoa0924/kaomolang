@@ -95,6 +95,21 @@ namespace Kaomoji.Tests
         }
 
         [Test]
+        public void PledgesHelpTomorrow()
+        {
+            var s = new GameState(1);
+            s.MarkSeen();
+            s.EndNight();
+            s.ApplyPledge(Pledge.Hint);
+            Assert.IsTrue(s.ShowsColor(s.Tonight[0]));
+            s.ApplyPledge(Pledge.Review);
+            Assert.AreEqual(1, s.Stickers.Values.Sum());
+            s.Fat = 30;
+            s.ApplyPledge(Pledge.Sleep);
+            Assert.AreEqual(20, s.Fat, 0.01);
+        }
+
+        [Test]
         public void BreakdownThenCollapse()
         {
             var s = new GameState(1) { Fat = 95 };

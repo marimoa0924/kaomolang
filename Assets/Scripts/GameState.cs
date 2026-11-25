@@ -122,8 +122,8 @@ namespace Kaomoji
             Decor decor = null;
             if (ok)
             {
-                // 고정 NPC가 나오는 특수 이벤트(카페의 바리스타)도 호감이 오른다
-                if (ev.Kind == EvKind.Npc || ev.Who == PlaceById(PendingPlace).Npc) Aff[PendingPlace] = Math.Min(3, Aff.GetValueOrDefault(PendingPlace) + 1);
+                // 어떤 이벤트든 성공하면 그 장소의 호감이 오른다. 특수 이벤트는 장식까지
+                Aff[PendingPlace] = Math.Min(3, Aff.GetValueOrDefault(PendingPlace) + 1);
                 if (ev.Decor != null) { decor = ev.Decor; Decors.Add(decor); DoneOnce.Add(ev.Id); }
                 else got = Gain(ev.WinMouth);
             }
@@ -278,6 +278,25 @@ namespace Kaomoji
             Uploaded = HeldTonight = false;
             Went = null;
             StartDay();
+        }
+
+        // 그림 일기의 다짐 스티커: 하루를 정리하며 고른 하나가 다음 날을 조금 돕는다 (EndNight 뒤에 부른다)
+        public void ApplyPledge(Pledge p)
+        {
+            switch (p)
+            {
+                case Pledge.Hint: // 오늘 밤 글 하나의 색이 미리 보인다
+                    var post = Tonight.FirstOrDefault(x => !Hinted.Contains(x.Id));
+                    if (post != null) Hinted.Add(post.Id);
+                    break;
+                case Pledge.Sleep: // 더 푹 잔다
+                    AddFat(-10);
+                    break;
+                case Pledge.Review: // 아직 못 푼 기호 하나에 스티커 한 장
+                    var sym = Seen.FirstOrDefault(t => !Solved(t));
+                    if (sym != null) Stickers[sym] = Stickers.GetValueOrDefault(sym) + 1;
+                    break;
+            }
         }
 
         public Ending FinalEnding()

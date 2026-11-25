@@ -11,7 +11,8 @@ namespace Kaomoji
     public enum Trait { Decode, Mimic, Empathy }
     public enum Slot { Morning, Afternoon, Night }
     public enum EvKind { Npc, Passerby, Special }
-    public enum Hint { Full, Partial, None } // 색 단서가 얼마나 보이는지. 모호한 글은 일부만, 또는 안 보인다
+    public enum Hint { Full, Partial, None }
+    public enum Pledge { Hint, Sleep, Review } // 그림 일기에서 고르는 내일의 다짐 // 색 단서가 얼마나 보이는지. 모호한 글은 일부만, 또는 안 보인다
 
     public static class Balance
     {
