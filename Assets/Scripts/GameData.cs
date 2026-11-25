@@ -26,6 +26,7 @@ namespace Kaomoji
         public const float NapSus = -10, DayFailSus = 8;
         public const float BreakdownSus = 30, BreakdownFat = -50, FatMaxAfterBreakdown = 120;
         public const float DoubterWrongSus = 15, DoubterPerfectSus = -10;
+        public const int HoldoutFollowers = 250; public const float HoldoutSus = 18; // 정상인(이상하게 여기는 사람)에게 답하면
         public const int RoomUpload = 50, DecorBonus = 400;
         public const int ConquerSusMax = 70, AbsorbSolved = 12;
         public const double ExtraEventChance = 0.3; // 외출 때 행인·특수 이벤트가 고정 NPC 대신 나올 확률

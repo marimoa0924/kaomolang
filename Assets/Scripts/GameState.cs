@@ -238,6 +238,12 @@ namespace Kaomoji
             var (f, s) = Balance.Reply(r);
             if (post.WantsCreepy && r == Result.Perfect) s = 0;
             if (r == Result.Creepy && Traits[Trait.Empathy] >= 2) s = 0;
+            if (post.Holdout)
+            {
+                // 아직 글자를 쓰는 정상인에게 답하면: 주목받아 팔로워는 오르지만, 정체를 의심받는다
+                f = Math.Max(f, Balance.HoldoutFollowers);
+                s += Balance.HoldoutSus;
+            }
             if (post.Author == Doubter)
             {
                 if (r == Result.Wrong) s = Balance.DoubterWrongSus;
