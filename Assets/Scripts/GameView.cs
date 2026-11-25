@@ -88,7 +88,9 @@ namespace Kaomoji
 
         // 연출
         string flyText, flyTo;
-        float crackT = -9, flyT = -9, frenzyUntil;
+        float flyT = -9, frenzyUntil;
+        float shutT = -99;          // 멘탈붕괴 셧다운 시작 시각
+        bool shutSwitched = true;   // 셧다운 중 날을 넘겼는지
 
         List<Step> steps;
         int step;
@@ -105,7 +107,7 @@ namespace Kaomoji
         Texture2D bgDay, bgSmear, circle;
 
         Step Cur => steps != null && step < steps.Count ? steps[step] : null;
-        bool CoachVisible => Cur != null && popups.Count == 0 && S.Ending == Ending.None && (Cur.When?.Invoke() ?? true) && CurtainDone;
+        bool CoachVisible => Cur != null && popups.Count == 0 && S.Ending == Ending.None && (Cur.When?.Invoke() ?? true) && CurtainDone && ShutDone;
 
         // ---------- 수명 주기 ----------
 
@@ -161,8 +163,26 @@ namespace Kaomoji
                 followersAtDayStart = S.Followers;
                 Floats(before);
             }
-            if (S.JustBrokeDown) { S.JustBrokeDown = false; crackT = Time.time; diary.Add(new Sticker("(ﾟДﾟ)!!", Pal.Hot)); }
-            if (S.Ending != Ending.None && !open.Contains(Win.Ending) && !open.Contains(Win.Diary) && CurtainDone)
+            if (S.JustBrokeDown)
+            {
+                // 멘탈붕괴: 화면이 폭주하다 셧다운. 그날은 그대로 끝
+                S.JustBrokeDown = false;
+                shutT = Time.time; shutSwitched = false;
+                popups.Clear();
+                for (int i = 0; i < 7; i++)
+                    toasts.Add(new Toast { T0 = Time.time + i * 0.08f, Id = 200 + toastSeq++ % 50, Body = Glitch(ErrFat[i % ErrFat.Length], 0.5f) });
+            }
+            if (!shutSwitched && Time.time - shutT >= ShutHalt)
+            {
+                // 화면이 꺼져 있는 동안 날을 넘긴다
+                shutSwitched = true;
+                S.ForceEndDay();
+                open.Clear(); popups.Clear(); toasts.Clear();
+                enc = null; homeResult = null; diary.Clear(); replyFx.Clear();
+                uploadR = null; target = -2; snsTab = -1; pledgeSel = null; traitsEndNight = false;
+                followersAtDayStart = S.Followers;
+            }
+            if (S.Ending != Ending.None && !open.Contains(Win.Ending) && !open.Contains(Win.Diary) && CurtainDone && ShutDone)
             {
                 open.Clear(); popups.Clear();
                 Open(Win.Ending);
@@ -183,9 +203,10 @@ namespace Kaomoji
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Tex(Pal.Letterbox));
             float k = Mathf.Min(Screen.width / (VW + Bezel * 2), Screen.height / (VH + Bezel * 2));
             if (k >= 1) k = Mathf.Floor(k); // 정수 배율로만 키워야 글자가 번지지 않는다
-            GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - VW * k) / 2, (Screen.height - VH * k) / 2, 0), Quaternion.identity, new Vector3(k, k, 1));
+            var shake = Time.time - shutT < ShutRiot ? new Vector3(UnityEngine.Random.Range(-14f, 14f), UnityEngine.Random.Range(-10f, 10f), 0) * k : Vector3.zero;
+            GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - VW * k) / 2, (Screen.height - VH * k) / 2, 0) + shake, Quaternion.identity, new Vector3(k, k, 1));
 
-            GUI.DrawTexture(new Rect(0, 0, VW, VH), S.Fat >= 70 ? bgSmear : bgDay);
+            GUI.DrawTexture(new Rect(0, 0, VW, VH), S.Fat >= 70 || S.BrokeDown ? bgSmear : bgDay); // 한 번 붕괴하면 배경은 번진 채로
             DrawGlitchBars();
             blocked = popups.Count > 0;
             DrawIcons();
@@ -210,6 +231,7 @@ namespace Kaomoji
                 GUI.BringWindowToFront(CoachId);
             }
             DrawCurtain();
+            DrawShutdown();
 
             if (popups.Count > 0)
             {
@@ -360,24 +382,7 @@ namespace Kaomoji
 
         void DrawFx()
         {
-            float ca = Time.time - crackT, fa = Time.time - flyT;
-            if (ca < 2.5f)
-            {
-                // 멘탈붕괴: 태블릿 화면이 깨진다
-                GUI.Window(FxId + 2, new Rect(0, 0, VW, VH), _ =>
-                {
-                    var c = new Vector2(VW * 0.55f, VH * 0.4f);
-                    var keep = GUI.matrix;
-                    for (int i = 0; i < 9; i++)
-                    {
-                        GUI.matrix = keep;
-                        GUIUtility.RotateAroundPivot(i * 40 + 13, c);
-                        GUI.DrawTexture(new Rect(c.x, c.y - 1.5f, 260 + i * 37 % 300, 3), Tex(Pal.Line));
-                    }
-                    GUI.matrix = keep;
-                }, GUIContent.none, GUIStyle.none);
-                GUI.BringWindowToFront(FxId + 2);
-            }
+            float fa = Time.time - flyT;
             if (fa < 0.8f && lastAnchors.TryGetValue("npc", out var from) && lastAnchors.TryGetValue(flyTo, out var to))
             {
                 // 얻은 파츠가 조립 바로 날아가 박힌다
@@ -435,9 +440,72 @@ namespace Kaomoji
             GUI.BringWindowToFront(96);
         }
 
+        // 멘탈붕괴 셧다운: 폭주(흔들림·잡음·에러 폭탄) → 브라운관처럼 꺼짐 → 정지 화면 → 재부팅 → 다음 날
+        const float ShutRiot = 1.0f, ShutOff = 1.7f, ShutHalt = 2.8f, ShutBoot = 4.2f, ShutEnd = 5.0f;
+        bool ShutDone => Time.time - shutT > ShutEnd;
+
+        void DrawShutdown()
+        {
+            float t = Time.time - shutT;
+            if (ShutDone) return;
+            GUI.Window(95, new Rect(-Bezel, -Bezel, VW + Bezel * 2, VH + Bezel * 2), _ =>
+            {
+                float W = VW + Bezel * 2, H = VH + Bezel * 2;
+                var cover = Tex(Pal.Bezel);
+                if (t < ShutRiot)
+                {
+                    // 폭주: 화면을 가로지르는 잡음 줄과 깨진 얼굴이 쏟아진다
+                    for (int i = 0; i < 14; i++)
+                        GUI.DrawTexture(new Rect(0, UnityEngine.Random.Range(0f, H), W, UnityEngine.Random.Range(2f, 18f)), Tex(i % 3 == 0 ? Pal.Hot : i % 3 == 1 ? Pal.Glitch2 : Pal.Glitch1));
+                    for (int i = 0; i < 6; i++)
+                        GUI.Label(new Rect(UnityEngine.Random.Range(0f, W - 200), UnityEngine.Random.Range(0f, H - 60), 260, 60), Glitch("(ﾟДﾟ)(ﾟДﾟ)", 0.4f), new GUIStyle(faceStyle) { fontSize = 34 });
+                    return;
+                }
+                if (t < ShutOff)
+                {
+                    // 브라운관이 꺼지듯: 위아래가 닫혀 한 줄이 되고, 그 줄이 점으로 줄어든다
+                    float p = (t - ShutRiot) / (ShutOff - ShutRiot);
+                    float gap = Mathf.Max(3, H * (1 - Mathf.Clamp01(p * 2)));
+                    GUI.DrawTexture(new Rect(0, 0, W, (H - gap) / 2), cover);
+                    GUI.DrawTexture(new Rect(0, (H + gap) / 2, W, (H - gap) / 2), cover);
+                    float lw = p < 0.5f ? W : W * (1 - (p - 0.5f) * 2) + 6;
+                    if (p >= 0.5f) GUI.DrawTexture(new Rect(0, (H - gap) / 2, W, gap), cover);
+                    GUI.DrawTexture(new Rect((W - lw) / 2, H / 2 - 2, lw, 4), Tex(Pal.Lightest));
+                    return;
+                }
+                GUI.DrawTexture(new Rect(0, 0, W, H), cover);
+                var big = new GUIStyle(dotStyle) { fontSize = 40, alignment = TextAnchor.MiddleCenter };
+                if (t < ShutBoot)
+                {
+                    // 정지: 깨진 얼굴 하나와 깜빡이는 정지 문구
+                    if ((int)(t * 3) % 2 == 0) GUI.Label(new Rect(0, H / 2 - 90, W, 70), Glitch("(・_・)", Mathf.Clamp01((t - ShutOff) * 0.5f)), new GUIStyle(faceStyle) { fontSize = 56 });
+                    GUI.Label(new Rect(0, H / 2 + 10, W, 50), Glitch("SYSTEM HALT", 0.25f), big);
+                    GUI.Label(new Rect(0, H / 2 + 60, W, 30), Glitch("MIMIC.EXE NOT RESPONDING", 0.3f), new GUIStyle(dotStyle) { fontSize = 18, alignment = TextAnchor.MiddleCenter });
+                    return;
+                }
+                // 재부팅: 막대가 차오르고 막이 걷힌다
+                float b = Mathf.Clamp01((t - ShutBoot) / 0.5f);
+                int bars = Mathf.RoundToInt(b * 12);
+                GUI.Label(new Rect(0, H / 2 - 40, W, 50), "REBOOT", big);
+                GUI.Label(new Rect(0, H / 2 + 10, W, 40), new string('▒', bars) + new string('·', 12 - bars), big);
+                GUI.Label(new Rect(0, H / 2 + 60, W, 40), $"{S.Day}일차", new GUIStyle(roundStyle) { fontSize = 44, alignment = TextAnchor.MiddleCenter });
+            }, GUIContent.none, GUIStyle.none);
+            GUI.BringWindowToFront(95);
+        }
+
+        // 한 번 붕괴한 뒤로는 화면 곳곳이 가끔 어긋난다
+        string Weird(string text)
+        {
+            if (!S.BrokeDown) return text;
+            int tick = (int)(Time.time * 2.5f) + text.Length;
+            return tick % 7 == 0 ? Glitch(text, 0.45f) : text;
+        }
+
         // 피로가 오를수록 배경이 번지고(스미어 그라데이션) 화면에 잡음 줄이 낀다
         void DrawGlitchBars()
         {
+            if (S.BrokeDown && Event.current.type == EventType.Repaint && UnityEngine.Random.value < 0.04f) // 붕괴 뒤: 이따금 한 줄씩
+                GUI.DrawTexture(new Rect(0, UnityEngine.Random.Range(0, VH), VW, UnityEngine.Random.Range(1, 4)), Tex(Pal.Glitch1));
             float f = S.Fat / 100f;
             if (f <= 0.6f || Event.current.type != EventType.Repaint) return;
             for (int i = 0; i < (int)((f - 0.5f) * 12); i++)
@@ -447,7 +515,7 @@ namespace Kaomoji
 
         string Monologue()
         {
-            string line = S.Fat < 40 ? "" : S.Fat < 70 ? "(-_-;)" : S.Fat < 100 ? "(・_・;)…(・_・;)" : "(ﾟДﾟ)(ﾟДﾟ)(ﾟДﾟ)(ﾟДﾟ)"; // 주인공은 한글을 쓰지 않는다
+            string line = S.BrokeDown ? "(ﾟ_ﾟ)(ﾟ_ﾟ)(ﾟ_ﾟ)(ﾟ_ﾟ)" : S.Fat < 40 ? "" : S.Fat < 70 ? "(-_-;)" : S.Fat < 100 ? "(・_・;)…(・_・;)" : "(ﾟДﾟ)(ﾟДﾟ)(ﾟДﾟ)(ﾟДﾟ)"; // 주인공은 한글을 쓰지 않는다
             // 피로가 오를수록 혼잣말에 행성의 기호가 섞인다
             var syms = Sym.Keys.ToArray();
             var rnd = new System.Random(S.Day * 31 + (int)S.Fat);
@@ -486,6 +554,7 @@ namespace Kaomoji
         void MaybeError()
         {
             float sus = S.Sus / 100f, fat = S.Fat / 100f, heat = Mathf.Max(sus, fat);
+            if (S.BrokeDown) heat = Mathf.Max(heat, 0.65f); // 붕괴 뒤엔 오류가 더 자주
             if (heat < 0.5f || UnityEngine.Random.value > heat) return;
             var pool = sus >= fat ? ErrSus : ErrFat;
             int i = Mathf.Min(pool.Length - 1, (int)((heat - 0.5f) * 2 * pool.Length));
@@ -582,7 +651,7 @@ namespace Kaomoji
             {
                 float a = (angles[i] - 90) * Mathf.Deg2Rad;
                 var lr = new Rect(c.x + Mathf.Cos(a) * 48 - 24, c.y + Mathf.Sin(a) * 48 - 13, 48, 26);
-                GUI.Label(lr, names[i], i == (int)S.Slot ? clockOn : clockOff);
+                GUI.Label(lr, Weird(names[i]), i == (int)S.Slot ? clockOn : clockOff);
             }
             // 바늘: 회전 행렬 대신 점을 이어 그린다 (영역 안 회전은 위치가 어긋난다)
             float ha = (angles[(int)S.Slot] - 90) * Mathf.Deg2Rad;
@@ -639,7 +708,7 @@ namespace Kaomoji
 
         void TitleBar(string title, float width, Action onClose)
         {
-            GUI.Label(new Rect(4, 4, width - 8, 26), title, titleStyle);
+            GUI.Label(new Rect(4, 4, width - 8, 26), Weird(title), titleStyle);
             if (onClose != null && GUI.Button(new Rect(width - 30, 7, 22, 20), "×", closeBtn) && !blocked) pending = onClose;
         }
 
@@ -880,7 +949,8 @@ namespace Kaomoji
 
         // ---------- SNS: 두 탭. [내 게시물] 인스타그램식 사진 올리기 / [멘션] 트위터식 팬 글에 멘션 달기 ----------
 
-        const string MyHandle = "@kao_kao";
+        const string MyHandleBase = "@kao_kao";
+        string MyHandle => Weird(MyHandleBase);
         int snsTab = -1;          // 0 내 게시물, 1 멘션, -1은 아직 안 고름(열 때 할 일이 남은 쪽으로)
         int target = -2;          // 멘션 탭에서 답할 글
         string uploadFace;

@@ -299,6 +299,21 @@ namespace Kaomoji
             }
         }
 
+        // 멘탈붕괴: 그날은 그대로 끝나고 다음 날로 (특성 포인트 없음, 남은 행동·답장도 사라진다)
+        public void ForceEndDay()
+        {
+            nightPointGiven = false;
+            ActionPending = false;
+            Pending = null;
+            if (Ending != Ending.None) return;
+            if (Day >= Balance.Days) { Ending = FinalEnding(); return; }
+            Day++;
+            Slot = Slot.Morning;
+            Uploaded = HeldTonight = false;
+            Went = null;
+            StartDay();
+        }
+
         public Ending FinalEnding()
         {
             if (Sus >= 100) return Ending.Found;

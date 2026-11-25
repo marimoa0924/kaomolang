@@ -119,6 +119,11 @@ namespace Kaomoji.Tests
             Assert.AreEqual(120, s.FatMax);
             Assert.AreEqual(50, s.Fat, 0.01);
             Assert.AreEqual(Ending.None, s.Ending);
+            int points = s.Points;
+            s.ForceEndDay(); // 붕괴한 날은 그대로 끝
+            Assert.AreEqual(2, s.Day);
+            Assert.AreEqual(Slot.Morning, s.Slot);
+            Assert.AreEqual(points, s.Points);
             s.Fat = 118;
             s.DoReply(0, Emo.Joy, Emo.Neutral); // +3 → 120
             Assert.AreEqual(Ending.Collapse, s.Ending);
