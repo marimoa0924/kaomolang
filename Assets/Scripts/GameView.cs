@@ -82,7 +82,7 @@ namespace Kaomoji
         // 날이 지나갈 때 내려오는 막: N일차 종료 → N+1일차
         float curtainT = -9;
         int curtainDay;
-        bool curtainSwitched;
+        bool curtainSwitched = true; // 시작할 땐 넘길 날이 없다
 
         // 연출
         string flyText, flyTo;
@@ -560,10 +560,10 @@ namespace Kaomoji
                 var lr = new Rect(c.x + Mathf.Cos(a) * 48 - 24, c.y + Mathf.Sin(a) * 48 - 13, 48, 26);
                 GUI.Label(lr, names[i], i == (int)S.Slot ? clockOn : clockOff);
             }
-            var keep = GUI.matrix;
-            GUIUtility.RotateAroundPivot(angles[(int)S.Slot] - 90, c);
-            GUI.DrawTexture(new Rect(c.x, c.y - 2, 26, 4), Tex(Pal.Hot));
-            GUI.matrix = keep;
+            // 바늘: 회전 행렬 대신 점을 이어 그린다 (영역 안 회전은 위치가 어긋난다)
+            float ha = (angles[(int)S.Slot] - 90) * Mathf.Deg2Rad;
+            for (int d = 0; d <= 28; d += 2)
+                GUI.DrawTexture(new Rect(c.x + Mathf.Cos(ha) * d - 2, c.y + Mathf.Sin(ha) * d - 2, 4, 4), Tex(Pal.Hot));
             GUI.Label(new Rect(c.x - 34, c.y - 4, 68, 24), $"{S.Day}일차", new GUIStyle(label) { alignment = TextAnchor.MiddleCenter });
             int left = S.IsNight ? 0 : 2 - (int)S.Slot;
             GUILayout.Label(S.IsNight ? "밤: SNS에 답장하기" : $"남은 행동 {new string('●', left)}{new string('○', 2 - left)}", new GUIStyle(label) { alignment = TextAnchor.MiddleCenter });
