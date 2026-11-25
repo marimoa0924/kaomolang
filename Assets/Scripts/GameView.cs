@@ -186,16 +186,16 @@ namespace Kaomoji
             foreach (var w in open.ToList())
                 rects[w] = GUILayout.Window((int)w + 1, rects[w], _ => DrawWin(w), GUIContent.none, winStyle, GUILayout.Width(WinWidth[w]));
 
+            DrawToasts();
+            DrawFx();
+            DrawTip();
+            // 튜토리얼 상자는 설명 툴팁보다 위에
             if (CoachVisible)
             {
                 PlaceCoach();
                 coachRect = GUILayout.Window(CoachId, coachRect, _ => DrawCoach(), GUIContent.none, coachStyle, GUILayout.Width(CoachW));
                 GUI.BringWindowToFront(CoachId);
             }
-
-            DrawToasts();
-            DrawFx();
-            DrawTip();
             DrawCurtain();
 
             if (popups.Count > 0)
