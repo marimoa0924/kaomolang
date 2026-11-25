@@ -18,7 +18,8 @@ namespace Kaomoji
     {
         public const int Days = 7;
         public const int FollowerGoal = 5000; // shortcut: 가안, 다음 플레이테스트로 조정
-        public const float FatOut = 10, FatOutMimic = 5, FatReply = 3, FatSleep = -15, FatHome = -5, FatNap = -25;
+        // 쉬지 않으면 하루 약 +30 (외출 2번 30 + 답장 3개 12 - 잠 12): 나흘째쯤 멘탈붕괴. 휴식을 두세 번은 골라야 한다
+        public const float FatOut = 15, FatOutMimic = 8, FatReply = 4, FatSleep = -12, FatHome = -5, FatNap = -30;
         public const float NapSus = -10, DayFailSus = 8;
         public const float BreakdownSus = 30, BreakdownFat = -50, FatMaxAfterBreakdown = 120;
         public const float DoubterWrongSus = 15, DoubterPerfectSus = -10;

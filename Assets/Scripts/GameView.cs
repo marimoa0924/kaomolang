@@ -32,7 +32,8 @@ namespace Kaomoji
             public string Target, Text;
             public Func<bool> Done;
             public bool Next;
-            public Step(string target, string text, Func<bool> done, bool next = false) { Target = target; Text = text; Done = done; Next = next; }
+            public Func<bool> When; // 이 조건일 때만 보인다 (예: 밤에만 할 수 있는 일은 밤에만 안내)
+            public Step(string target, string text, Func<bool> done, bool next = false, Func<bool> when = null) { Target = target; Text = text; Done = done; Next = next; When = when; }
         }
 
         // 캔디 파스텔 32색 중 쓰는 것들. 이 밖의 색은 쓰지 않는다
@@ -104,7 +105,7 @@ namespace Kaomoji
         Texture2D bgDay, bgSmear, circle;
 
         Step Cur => steps != null && step < steps.Count ? steps[step] : null;
-        bool CoachVisible => Cur != null && popups.Count == 0 && S.Ending == Ending.None;
+        bool CoachVisible => Cur != null && popups.Count == 0 && S.Ending == Ending.None && (Cur.When?.Invoke() ?? true) && CurtainDone;
 
         // ---------- 수명 주기 ----------
 
@@ -126,7 +127,7 @@ namespace Kaomoji
                 new("react", "반응하자!\n성공이든 실패든 상대의 입을 얻는다.", () => enc != null || !Morning()),
                 new("close_result", "결과를 봤으면 × 로 창을 닫자.\n창을 닫아야 시간이 흐른다.", () => !Morning()),
                 new("icon_home", "오후다. 한 번 더 움직이자.\n[외출]이나 [집]에서 하나를 하고\n창을 닫으면 밤이 된다.", () => S.IsNight),
-                new("icon_sns", "밤이다.\n[SNS]를 열자.", () => open.Contains(Win.Sns) || S.NightDone || PastDay1()),
+                new("icon_sns", "밤이다.\n[SNS]를 열자.", () => open.Contains(Win.Sns) || S.NightDone || PastDay1(), false, () => S.IsNight),
                 new("nb", "SNS를 열면 [해독 수첩]이 옆에 같이 열린다.\n감각의 이름·색·모양은 여기서만 본다.", () => S.Replies[0] != null || PastDay1(), true),
                 new("upload", "먼저 내 게시물. 사진 속 장면을 읽고\n어울리는 얼굴을 골라 [▣ 게시].", () => S.Uploaded || PastDay1()),
                 new("tab_mention", "[@ 멘션] 탭: 팬들의 글에\n카오모지로 멘션을 단다.", () => snsTab == 1 || S.Replies[0] != null || PastDay1()),
@@ -264,10 +265,6 @@ namespace Kaomoji
             }
             if (w == Win.Diary)
             {
-                var page = diary.ToList();
-                var pl = Pledges.First(x => x.p == pledgeSel);
-                page.Add(new Sticker(pl.icon, pl.color));
-                album.Add(page);
                 curtainT = Time.time; curtainDay = S.Day; curtainSwitched = false;
             }
             if (w == Win.Home) homeResult = null;
@@ -276,7 +273,7 @@ namespace Kaomoji
         void Restart()
         {
             S = new GameState();
-            open.Clear(); popups.Clear(); toasts.Clear(); floaters.Clear(); diary.Clear(); album.Clear(); pledgeSel = null;
+            open.Clear(); popups.Clear(); toasts.Clear(); floaters.Clear(); diary.Clear(); pledgeSel = null;
             traitsEndNight = false;
             followersAtDayStart = 0;
             enc = null; homeResult = null; replyFx.Clear(); uploadR = null; target = -2; snsTab = -1; knownMood.Clear();
@@ -574,7 +571,7 @@ namespace Kaomoji
         static readonly string[] StatHelp =
         {
             $"♥ 팔로워: 7일째에 {Balance.FollowerGoal:#,0}명이 넘으면 성공.",
-            "!? 의심: 100이 되면 정체가 들킨다.",
+            $"!? 의심: 100이면 정체가 들킨다. {Balance.ConquerSusMax} 이상이면 진엔딩도 막힌다.",
             "~ 피로: 한계에 닿으면 멘탈붕괴. 잠과 집 활동으로 내린다.",
         };
 
@@ -796,10 +793,10 @@ namespace Kaomoji
                     decorTutorial = true;
                     steps.AddRange(new[]
                     {
-                        new Step("gain", "특수 이모지를 얻었다!\n밤에 내 게시물에 붙일 수 있다.", () => S.IsNight || S.Decors.Count == 0, true),
-                        new Step("icon_sns", "[SNS]를 열자.", () => open.Contains(Win.Sns) || S.Decors.Count == 0),
-                        new Step("tab_post", "[▣ 내 게시물] 탭으로.", () => snsTab == 0 || S.Decors.Count == 0 || S.Uploaded),
-                        new Step("decor", "특수 이모지를 골라 붙이고 [▣ 게시]!\n팔로워가 폭주한다.", () => S.Decors.Count == 0 || S.Uploaded),
+                        new Step("gain", "특수 이모지를 얻었다!\n밤에 내 게시물에 붙일 수 있다.", () => enc == null || S.Decors.Count == 0, true, () => enc != null),
+                        new Step("icon_sns", "밤이다. 특수 이모지를 써 보자.\n[SNS]를 열자.", () => open.Contains(Win.Sns) || S.Decors.Count == 0, false, () => S.IsNight && !S.Uploaded),
+                        new Step("tab_post", "[▣ 내 게시물] 탭으로.", () => snsTab == 0 || S.Decors.Count == 0 || S.Uploaded, false, () => open.Contains(Win.Sns)),
+                        new Step("decor", "특수 이모지를 골라 붙이고 [▣ 게시]!\n팔로워가 폭주한다.", () => S.Decors.Count == 0 || S.Uploaded, false, () => open.Contains(Win.Sns) && snsTab == 0),
                     });
                 }
             }
@@ -1373,7 +1370,8 @@ namespace Kaomoji
             (Pledge.Review, "¶+", Pal.BtnFace, "복습: 아직 못 푼 기호 하나에 스티커가 한 장 붙는다."),
         };
         Pledge? pledgeSel;
-        readonly List<List<Sticker>> album = new(); // 7일 앨범: 엔딩에서 다시 본다
+        float pledgeT = -9;
+        Rect pledgeFrom;
 
         void DrawDiary()
         {
@@ -1392,6 +1390,19 @@ namespace Kaomoji
                 GUIUtility.RotateAroundPivot(i * 37 % 15 - 7, r.center);
                 GUI.Label(r, st.Text, StickerStyle(st.Color));
             }
+            // 고른 다짐 스티커: 일기장 오른쪽 아래로 날아가 꾹 붙는다
+            if (pledgeSel.HasValue)
+            {
+                var pl = Pledges.First(x => x.p == pledgeSel);
+                var to = new Rect(area.xMax - 150, area.yMax - 64, 128, 56);
+                float t = Mathf.Clamp01((Time.time - pledgeT) / 0.35f);
+                var pos = Vector2.Lerp(pledgeFrom.center, to.center, t);
+                float sc = t < 1 ? 1.6f - 0.6f * t : 1 + 0.15f * Mathf.Max(0, 1 - (Time.time - pledgeT - 0.35f) * 6); // 붙는 순간 꾹
+                var r = new Rect(pos.x - 64 * sc, pos.y - 28 * sc, 128 * sc, 56 * sc);
+                GUI.matrix = keep;
+                GUIUtility.RotateAroundPivot(8 - 16 * t + 4, r.center);
+                GUI.Label(r, pl.icon, new GUIStyle(StickerStyle(pl.color)) { fontSize = Mathf.RoundToInt(18 * sc) });
+            }
             GUI.matrix = keep;
             GUILayout.EndVertical();
 
@@ -1400,7 +1411,8 @@ namespace Kaomoji
             foreach (var (p, icon, color, tip) in Pledges)
             {
                 bool sel = pledgeSel == p;
-                if (GUILayout.Button(sel ? $"[{icon}]" : icon, sel ? StickerStyle(Pal.Hot) : StickerStyle(color), GUILayout.Width(120), GUILayout.Height(56)) && !blocked) pledgeSel = p;
+                if (GUILayout.Button(sel ? "" : icon, sel ? offBtn : StickerStyle(color), GUILayout.Width(120), GUILayout.Height(56)) && !blocked && !sel)
+                { pledgeSel = p; pledgeT = Time.time; pledgeFrom = GUILayoutUtility.GetLastRect(); } // 고른 칸은 비고 스티커는 일기장으로
                 Explain(tip);
             }
             GUILayout.EndHorizontal();
@@ -1427,18 +1439,13 @@ namespace Kaomoji
             GUILayout.Label(text, new GUIStyle(label) { fontSize = 17, alignment = TextAnchor.MiddleCenter });
             if (S.Ending == Ending.Conquer)
                 foreach (var cut in S.EpilogueCuts) GUILayout.Label(cut, paper);
-            // 7일 앨범: 매일 밤 그린 그림 일기
-            for (int d = 0; d < album.Count; d++)
-            {
-                GUILayout.BeginHorizontal();
-                GUILayout.Label($"{d + 1}", new GUIStyle(dotStyle) { fontSize = 16 }, GUILayout.Width(22));
-                foreach (var st in album[d].Take(6)) GUILayout.Label(st.Text, StickerStyle(st.Color), GUILayout.Height(28));
-                GUILayout.FlexibleSpace();
-                GUILayout.EndHorizontal();
-            }
             GUILayout.Space(10);
             GUILayout.Label($"팔로워 {S.Followers:#,0}   의심 {Mathf.RoundToInt(S.Sus)}   해독 {S.SolvedCount}/{Sym.Count}   시너지 {S.FoundSynergies.Count}/{Synergies.Length}",
                 new GUIStyle(dotStyle) { alignment = TextAnchor.MiddleCenter });
+            // 진엔딩 조건: 무엇이 모자랐는지
+            if (S.Ending != Ending.Conquer)
+                GUILayout.Label($"진엔딩 조건   팔로워 {Balance.FollowerGoal:#,0} 이상 {(S.Followers >= Balance.FollowerGoal ? "○" : "×")}   의심 {Balance.ConquerSusMax} 미만 {(S.Sus < Balance.ConquerSusMax ? "○" : "×")}",
+                    new GUIStyle(label) { alignment = TextAnchor.MiddleCenter });
             GUILayout.Space(16);
             Btn("<size=20>◀◀</size>", Restart, true, null, GUILayout.Height(44));
         }
