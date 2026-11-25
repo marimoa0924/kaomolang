@@ -605,7 +605,7 @@ namespace Kaomoji
             }
             // 해독 수첩은 오른쪽 아래
             var nr = new Rect(VW - 116, VH - BarH - 108, 92, 96);
-            if (GUI.Button(nr, "<size=34>¶</size>\n<size=14>해독 수첩</size>", iconStyle) && !blocked) pending = () => Open(Win.Notebook);
+            if (GUI.Button(nr, "<size=34>¶</size>\n<size=14>해독 수첩</size>", iconStyle) && !blocked) pending = () => { if (open.Contains(Win.Notebook)) Close(Win.Notebook); else Open(Win.Notebook); }; // 한 번 더 누르면 닫힌다
             MarkRect("icon_notebook", nr, Vector2.zero);
         }
 
