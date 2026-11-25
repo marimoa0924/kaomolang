@@ -107,6 +107,8 @@ namespace Kaomoji
         Texture2D bgDay, bgSmear, circle;
 
         Step Cur => steps != null && step < steps.Count ? steps[step] : null;
+        int mainSteps; // 기본 튜토리얼 단계 수 (뒤에 붙는 특수 이모지 안내는 제외)
+        bool InTutorial => steps != null && step < mainSteps;
         bool CoachVisible => Cur != null && popups.Count == 0 && S.Ending == Ending.None && (Cur.When?.Invoke() ?? true) && CurtainDone && ShutDone;
 
         // ---------- 수명 주기 ----------
@@ -144,10 +146,12 @@ namespace Kaomoji
                 new("sleep", "잠들기 전에 그림 일기를 쓴다.", () => open.Contains(Win.Diary) || PastDay1()),
                 new("pledge", "오늘 한 일이 스티커로 남는다.\n내일을 도울 다짐 스티커를 하나 고르자.", () => pledgeSel.HasValue || PastDay1()),
             };
+            mainSteps = steps.Count;
         }
 
         void Update()
         {
+            S.NoExtras = InTutorial; // 튜토리얼 동안은 특별 이벤트가 끼어들지 않는다
             if (pending != null) { var a = pending; pending = null; a(); }
             while (Cur?.Done?.Invoke() == true) step++;
             if (!curtainSwitched && Time.time - curtainT >= CurtainIn)
@@ -399,7 +403,7 @@ namespace Kaomoji
 
         void ExplainRect(string text, Rect r, Vector2 o)
         {
-            if (Event.current.type != EventType.Repaint || !r.Contains(Event.current.mousePosition)) return;
+            if (InTutorial || Event.current.type != EventType.Repaint || !r.Contains(Event.current.mousePosition)) return; // 튜토리얼 동안은 마우스 설명 없음
             var mouse = Event.current.mousePosition + o;
             // 마우스가 지금 그리는 창이 아닌 다른 창 위에 있으면 (가려진 요소) 설명을 띄우지 않는다
             if (open.Any(w => w != curWin && rects.TryGetValue(w, out var wr) && wr.Contains(mouse))) return;
@@ -409,7 +413,7 @@ namespace Kaomoji
         void DrawTip()
         {
             var t = tip ?? (Time.time - pinT < 2.2f ? (pinTip, pinRect) : ((string, Rect)?)null);
-            if (t == null) return;
+            if (t == null || InTutorial) return;
             var (text, a) = t.Value;
             var size = label.CalcSize(new GUIContent(text));
             var r = new Rect(Mathf.Clamp(a.xMax + 8, 4, VW - size.x - 30), Mathf.Clamp(a.y, 4, VH - BarH - size.y - 24), size.x + 24, size.y + 20);

@@ -100,11 +100,13 @@ namespace Kaomoji
 
         // ---------- 낮 ----------
 
+        public bool NoExtras; // 튜토리얼 동안은 행인·특수 이벤트 없이 고정 NPC만
+
         public Encounter PrepareOuting(string placeId)
         {
             var p = PlaceById(placeId);
             var extras = new[] { p.Passerby, p.Special }.Where(e => !DoneOnce.Contains(e.Id)).ToList();
-            Pending = extras.Count > 0 && rng.NextDouble() < Balance.ExtraEventChance
+            Pending = !NoExtras && extras.Count > 0 && rng.NextDouble() < Balance.ExtraEventChance
                 ? extras[rng.Next(extras.Count)]
                 : p.Story[Math.Min(Aff.GetValueOrDefault(placeId), 2)];
             PendingPlace = placeId;
