@@ -854,7 +854,7 @@ namespace Kaomoji
             var (syn, isNew) = S.DoMirror(selEye, selMouth);
             Floats(before);
             HomeDone(isNew ? "시너지!" : "연습", face);
-            if (isNew) diary.Add(new Sticker($"★{face}", E[selEye].Color));
+            if (isNew) diary.Add(new Sticker($"+{face}", E[selEye].Color));
         }
 
         void Peek()
@@ -1203,7 +1203,7 @@ namespace Kaomoji
 
         static string ResultMark(Result r) => r switch
         {
-            Result.Perfect => "★", Result.Success => "○", Result.Creepy => "!?", Result.Meh => "…", _ => "×",
+            Result.Perfect => "↑↑", Result.Success => "↑", Result.Creepy => "~?", Result.Meh => "…", _ => "×", // 감정 모양(★▼◆!♥)과 겹치지 않게
         };
 
         void Hold(int i)
@@ -1280,7 +1280,7 @@ namespace Kaomoji
                     var e = Sym[s];
                     bool hot = hoverSym == s;
                     if (S.Solved(s)) ColorCell(E[e].Color, E[e].Color, s, E[e].Name, 72, true, hot);
-                    else if (S.Stickers.TryGetValue(s, out var c)) ColorCell(Pal.Lightest, Pal.Lightest, s, $"{E[e].Shape}{new string('●', c)}{new string('○', need - c)}", 72, true, hot);
+                    else if (S.Stickers.TryGetValue(s, out var c)) ColorCell(Pal.Lightest, Pal.Lightest, s, $"{E[e].Shape} {c}/{need}", 72, true, hot); // 모양 + 모은 스티커 수
                     else ColorCell(Pal.Paper, Pal.Paper, s, "?", 72, true, hot);
                 }
                 GUILayout.FlexibleSpace();
@@ -1357,7 +1357,7 @@ namespace Kaomoji
         // 다짐 스티커: 하나를 골라야 잠들 수 있다. 다음 날을 조금 돕는다
         static readonly (Pledge p, string icon, string color, string tip)[] Pledges =
         {
-            (Pledge.Hint, "★?", Pal.TitleA, "공감 연습: 내일 밤 글 하나의 색이 미리 보인다."),
+            (Pledge.Hint, "?+", Pal.TitleA, "공감 연습: 내일 밤 글 하나의 색이 미리 보인다."),
             (Pledge.Sleep, "zZ+", Pal.Bubble, "푹 자기: 피로가 10 더 내려간다."),
             (Pledge.Review, "¶+", Pal.BtnFace, "복습: 아직 못 푼 기호 하나에 스티커가 한 장 붙는다."),
         };

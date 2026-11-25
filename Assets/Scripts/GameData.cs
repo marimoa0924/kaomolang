@@ -42,7 +42,7 @@ namespace Kaomoji
 
     public class EmoInfo
     {
-        public string Name, Human, EyeL, EyeR, Mouth, Color, Shape; // Shape: 색이 비슷해도 구분되게 색 단서에 함께 붙는 모양
+        public string Name, Human, EyeL, EyeR, Mouth, Color, Shape; // Shape: 색이 비슷해도 구분되게 색 단서에 함께 붙는 모양. 다른 UI 기호(●○ 진행 표시 등)와 겹치지 않게
         public EmoInfo(string n, string h, string l, string r, string m, string c, string shape) { Name = n; Human = h; EyeL = l; EyeR = r; Mouth = m; Color = c; Shape = shape; }
         public string Eyes => EyeL + " " + EyeR;
     }
@@ -103,9 +103,9 @@ namespace Kaomoji
             [Emo.Joy] = new("반짝", "기쁨", "^", "^", "▽", "#FFA9DE", "★"),
             [Emo.Sad] = new("축축", "슬픔", "T", "T", "﹏", "#BAE2FC", "▼"),
             [Emo.Anger] = new("따끔", "분노", "`", "´", "益", "#F29CFF", "◆"),
-            [Emo.Surprise] = new("쿨", "놀람", "ﾟ", "ﾟ", "Д", "#B6FBFF", "●"),
+            [Emo.Surprise] = new("쿨", "놀람", "ﾟ", "ﾟ", "Д", "#B6FBFF", "!"),
             [Emo.Shy] = new("간질", "부끄러움", ">", "<", "ω", "#CCB8F7", "♥"),
-            [Emo.Neutral] = new("민짜", "중립", "・", "・", "_", "#D6DAE5", "○"),
+            [Emo.Neutral] = new("민짜", "중립", "・", "・", "_", "#D6DAE5", "-"),
         };
 
         public static string Face(Emo eye, Emo mouth, Decor d = null) => $"{d?.L}({E[eye].EyeL}{E[mouth].Mouth}{E[eye].EyeR}){d?.R}";
