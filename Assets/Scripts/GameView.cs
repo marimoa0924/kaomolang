@@ -302,27 +302,19 @@ namespace Kaomoji
 
         float coachH = 90;
 
-        // 후보 자리(대상의 아래·위·오른쪽·왼쪽, 화면 구석) 중 대상과 열린 창을 가장 덜 가리는 곳
+        // 예전처럼 대상의 아래 → 위 → 오른쪽 → 왼쪽 순서로 놓되, 가리면 다음 후보로.
+        // 1순위: 대상이 든 창을 가리지 않는 자리, 2순위: 대상만이라도 가리지 않는 자리
         void PlaceCoach()
         {
             float h = Mathf.Max(coachH, 70), w = CoachW;
-            if (!lastAnchors.TryGetValue(Cur.Target, out var a)) a = new Rect(VW / 2, 60, 0, 0);
-            var cands = new[]
-            {
-                new Vector2(a.x, a.yMax + 10), new Vector2(a.x, a.y - h - 10),
-                new Vector2(a.xMax + 10, a.y), new Vector2(a.x - w - 10, a.y),
-                new Vector2(8, VH - BarH - h - 8), new Vector2(VW - w - 8, VH - BarH - h - 8),
-                new Vector2(8, 8), new Vector2(VW - w - 8, 8), new Vector2((VW - w) / 2, VH - BarH - h - 8),
-            };
-            float Overlap(Rect r1, Rect r2) => Mathf.Max(0, Mathf.Min(r1.xMax, r2.xMax) - Mathf.Max(r1.x, r2.x)) * Mathf.Max(0, Mathf.Min(r1.yMax, r2.yMax) - Mathf.Max(r1.y, r2.y));
-            float best = float.MaxValue;
-            foreach (var c in cands)
-            {
-                var r = new Rect(Mathf.Clamp(c.x, 4, VW - w - 4), Mathf.Clamp(c.y, 4, VH - BarH - h - 4), w, h);
-                float score = Overlap(r, a) * 50 + open.Sum(o => rects.TryGetValue(o, out var wr) ? Overlap(r, wr) : 0)
-                    + Vector2.Distance(r.center, a.center) * 0.5f; // 같은 점수면 대상에 가까운 쪽
-                if (score < best) { best = score; coachRect.x = r.x; coachRect.y = r.y; }
-            }
+            if (!lastAnchors.TryGetValue(Cur.Target, out var a)) { coachRect.x = (VW - w) / 2; coachRect.y = 70; return; }
+            Rect Fit(float x, float y) => new Rect(Mathf.Clamp(x, 4, VW - w - 4), Mathf.Clamp(y, 4, VH - BarH - h - 4), w, h);
+            var cands = new[] { Fit(a.x, a.yMax + 12), Fit(a.x, a.y - h - 12), Fit(a.xMax + 12, a.y), Fit(a.x - w - 12, a.y) };
+            Rect? win = open.Where(o => rects.ContainsKey(o) && rects[o].Contains(a.center)).Select(o => (Rect?)rects[o]).LastOrDefault();
+            var pick = cands.FirstOrDefault(r => win == null ? !r.Overlaps(a) : !r.Overlaps(win.Value));
+            if (pick.width == 0) pick = cands.FirstOrDefault(r => !r.Overlaps(a));
+            if (pick.width == 0) pick = cands[0];
+            coachRect.x = pick.x; coachRect.y = pick.y;
         }
 
         void DrawCoach()
