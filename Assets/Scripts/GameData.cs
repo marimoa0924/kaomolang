@@ -13,17 +13,32 @@ namespace Kaomoji
     public enum Slot { Morning, Afternoon, Night }
     public enum EvKind { Npc, Passerby, Special }
     public enum Hint { Full, Partial, None }
-    public enum Pledge { Hint, Sleep, Review } // 그림 일기에서 고르는 내일의 다짐 // 색 단서가 얼마나 보이는지. 모호한 글은 일부만, 또는 안 보인다
+    public enum Pledge { Hint, Sleep, Review } // 그림 일기에서 고르는 내일의 다짐
+    public enum Recovery { Sleep, TrueForm, HomeCall, Snack } // 잠들기 전 회복 선택
+    public enum NoticeKind { HeartDay, StarBan, NeutralWeek, NoPhoto, DoubleFace, SameEyeMouth, QuietNight, HoldoutCampaign, DecorBoom, StayIn, FaceShortage, AllNighter, HoldoutSilence, MimicDay, Final } // 색 단서가 얼마나 보이는지. 모호한 글은 일부만, 또는 안 보인다
 
     public static class Balance
     {
-        public const int Days = 7; // shortcut: 프로토타입 7일, 정식판 30일. 단골 이야기는 7일치뿐이고 나머지는 글 풀이 채운다
+        public const int Days = 15; // v4: 세 막 (1~5 적응, 6~10 확산, 11~15 정복). 정식판은 30일
+        public static int Act(int day) => day <= 5 ? 1 : day <= 10 ? 2 : 3;
+        public const int SecondSetDay = 6, DecorComboDay = 8; // 두 번째 기호 세트, 장식 조합 해금
         public const int PostsPerNight = 3;
         public const float UneasyFrom = 0.5f; // 팔로워가 목표의 이만큼이면 '이상하다'는 글이 섞이기 시작
-        public const int FollowerGoal = 5000; // shortcut: 가안, 다음 플레이테스트로 조정
+        public const int FollowerGoal = 12000; // v4 15일 기준 가안. 세계 변화 %는 목표 대비라 그대로 따라온다
         // 쉬지 않으면 하루 약 +30 (외출 2번 30 + 답장 3개 12 - 잠 12): 나흘째쯤 멘탈붕괴. 휴식을 두세 번은 골라야 한다
         public const float FatOut = 15, FatOutMimic = 8, FatReply = 4, FatSleep = -12, FatHome = -5, FatNap = -30;
         public const float NapSus = -10, DayFailSus = 8;
+        public const float SusDecay = 2; // 의심이 한 번도 오르지 않은 날 밤에 내려간다
+        // 의태 피로 구간: 40 새어남(지친 사진), 70 위험(지친 사진 확대, 게시물 의심 +3, 입력 흔들림), 100 판정
+        public const float LeakFrom = 40, DangerFrom = 70, DangerPostSus = 3, InputWobble = 0.2f;
+        public const float TiredSad = 1.2f, TiredSadDanger = 1.5f, TiredJoy = 0.8f;
+        public const double AwakenChance = 0.2, AwakenPark = 0.1, AwakenSlept = 0.05; // 100 판정: 각성 확률
+        public const float AwakenFat = 70;
+        // 정산 회복 선택 (잠 -12를 대신한다)
+        public const float RestSleep = -12, RestTrue = -25, RestTrueSus = 5, RestCall = -8, RestSnack = -15, SnackOutingFat = 3;
+        public const int ConfirmFollowers = 150; // 그림 페이지 묶음 확정
+        public static readonly int[] AffNeed = { 1, 2, 4 };      // 장소 호감 0→1, 1→2, 2→3에 필요한 성공 수
+        public static readonly int[] IntimacyNeed = { 2, 3, 4 }; // 단골 친밀도
         public const float BreakdownSus = 30, BreakdownFat = -50, FatMaxAfterBreakdown = 120;
         public const float DoubterWrongSus = 15, DoubterPerfectSus = -10;
         public const float HoldoutSus = 18; // 정상인(이상하게 여기는 사람)에게 답하면
@@ -95,6 +110,11 @@ namespace Kaomoji
         public bool WantsCreepy;
         public bool Holdout; // 다들 카오모지로만 말하는 걸 이상하게 여기는 사람: 끝까지 글자로 쓴다
         public Post Bad; // 단골이 지난 답장에 서운하면 대신 오는 글
+        public Answer[] Answers2;  // 빈칸 긴 글의 두 번째 빈칸 정답 (null이면 보통 글)
+        public bool Literal;       // 오역 표시: 틀리면 그 팬이 내 얼굴을 엉뚱하게 쓴 후속 글이 온다
+        public string Misuse;      // 오역 후속 글이 쓰고 있는 내 얼굴
+        public bool IsBlank => Answers2 != null;
+        public Post Clone() => (Post)MemberwiseClone();
     }
 
     public static class GameData
@@ -151,7 +171,55 @@ namespace Kaomoji
             ["※"] = Emo.Anger, ["▲"] = Emo.Anger, ["♯"] = Emo.Anger, ["†"] = Emo.Anger,
             ["◉"] = Emo.Surprise, ["⁂"] = Emo.Surprise, ["∮"] = Emo.Surprise, ["⊙"] = Emo.Surprise,
             ["♡"] = Emo.Shy, ["∽"] = Emo.Shy, ["◐"] = Emo.Shy, ["❀"] = Emo.Shy,
+            // 두 번째 세트: 6일차부터 섞인다
+            ["∩"] = Emo.Joy, ["♭"] = Emo.Joy, ["∵"] = Emo.Sad, ["∫"] = Emo.Sad, ["⊥"] = Emo.Anger, ["≡"] = Emo.Anger,
+            ["∇"] = Emo.Surprise, ["∂"] = Emo.Surprise, ["∝"] = Emo.Shy, ["∋"] = Emo.Shy,
         };
+        public static readonly HashSet<string> SecondSet = new() { "∩", "♭", "∵", "∫", "⊥", "≡", "∇", "∂", "∝", "∋" };
+
+        // 그림 페이지: 감각 이름 대신 장면으로 짝짓는다
+        public static readonly Dictionary<Emo, string> Scenes = new()
+        {
+            [Emo.Joy] = "촛불 꽂힌 케이크", [Emo.Sad] = "빗속에 놓인 우산", [Emo.Anger] = "밟힌 발가락",
+            [Emo.Surprise] = "번개 맞은 나무", [Emo.Shy] = "빨개진 볼과 편지",
+        };
+
+        public static readonly Decor Tentacle = new("tentacle", "촉수", "~(", ")~"); // 피로 위험 구간에서 한 번 해금
+
+        // 장소 호감 단계 능력 (Persona 5의 협력자 랭크)
+        public static readonly Dictionary<(string place, int lv), string> Abilities = new()
+        {
+            [("park", 2)] = "외출 피로 −3", [("park", 3)] = "100 판정 각성 +10%",
+            [("station", 2)] = "거리 말풍선 해독 단서 +1", [("station", 3)] = "이벤트 제한 시간 +2초",
+            [("store", 2)] = "회복 선택에 야식 먹기", [("store", 3)] = "검문 실수 절반",
+            [("cafe", 2)] = "피드 구경 색 단서 둘", [("cafe", 3)] = "묶음 확정 실패 때 틀린 칸 하나 표시",
+        };
+
+        public static readonly string[] ActNames = { "", "1막 · 적응", "2막 · 확산", "3막 · 정복" };
+
+        public class Notice
+        {
+            public NoticeKind Kind; public string Title, Rule; public int MinAct, MaxAct = 3; public bool NeedHalf, NeedNoHalf;
+        }
+        // 아침 유행 공지 (Papers, Please의 일일 규칙): 2일차부터 하루 한 장, 막 안에서는 무작위
+        public static readonly Notice[] Notices =
+        {
+            new() { Kind = NoticeKind.HeartDay, Title = "♥의 날", Rule = "간질이 정답인 글과 게시물의 팔로워 ×1.5", MinAct = 1 },
+            new() { Kind = NoticeKind.StarBan, Title = "★ 자제령", Rule = "반짝 눈·입을 쓸 때마다 의심 +5", MinAct = 1 },
+            new() { Kind = NoticeKind.NeutralWeek, Title = "민짜 주간", Rule = "시큰둥 판정이 성공으로 올라간다", MinAct = 1 },
+            new() { Kind = NoticeKind.SameEyeMouth, Title = "똑같은 눈입", Rule = "눈과 입이 같은 감정인 답장에 팔로워 +10%", MinAct = 1 },
+            new() { Kind = NoticeKind.QuietNight, Title = "조용한 밤", Rule = "멘션이 둘로 줄고 피로 −5", MinAct = 1 },
+            new() { Kind = NoticeKind.StayIn, Title = "외출 자제", Rule = "외출 피로 +5, 대신 거리 말풍선의 해독 단서가 둘", MinAct = 1 },
+            new() { Kind = NoticeKind.DecorBoom, Title = "장식 열풍", Rule = "특수 이모지 효과 두 배", MinAct = 1 },
+            new() { Kind = NoticeKind.NoPhoto, Title = "사진 금지", Rule = "게시물 사진의 장면 설명이 가려진다", MinAct = 2 },
+            new() { Kind = NoticeKind.DoubleFace, Title = "쌍얼굴 유행", Rule = "멘션 하나가 빈칸 긴 글로 바뀐다", MinAct = 2 },
+            new() { Kind = NoticeKind.FaceShortage, Title = "얼굴 품귀", Rule = "어제 가장 많이 쓴 얼굴을 오늘 쓰면 팔로워 ×0.7", MinAct = 2 },
+            new() { Kind = NoticeKind.AllNighter, Title = "밤샘 챌린지", Rule = "피로 +10으로 시작, 모든 답장 팔로워 ×1.3", MinAct = 2 },
+            new() { Kind = NoticeKind.HoldoutCampaign, Title = "정상인 캠페인", Rule = "정상인 글이 하나 더 온다", MinAct = 2, NeedHalf = true },
+            new() { Kind = NoticeKind.HoldoutSilence, Title = "정상인 침묵", Rule = "오늘 정상인 글이 없고 의심 −5", MinAct = 2 },
+            new() { Kind = NoticeKind.MimicDay, Title = "따라 하기의 날", Rule = "어제 마지막 얼굴과 같은 감정의 눈으로 답하면 완벽", MinAct = 3 },
+        };
+        public static readonly Notice FinalNotice = new() { Kind = NoticeKind.Final, Title = "마지막 공지", Rule = "오늘이 마지막 날이다", MinAct = 3 };
 
         public static readonly Decor Paw = new("paw", "고양이 수염", "=", "=");
         public static readonly Decor Tear = new("tear", "눈물방울", "。゜", "゜。");
@@ -294,35 +362,52 @@ namespace Kaomoji
         static Post Creepy(Post p) { p.WantsCreepy = true; return p; }
         static Post Or(Post p, Post bad) { p.Bad = bad; return p; }
 
-        // 팬 글 21개: 하루 3개. 정답이 둘인 글 6개
+        // 단골 셋의 이야기 글: 15일 동안 한 명당 5개 (소개 → 갈등 → 결말). 1일차는 튜토리얼용으로 지나가는 팬 글 하나를 함께 둔다.
+        // 별빛러버 1·4·7·10·13일, 우울한고양이 1·3·6·9·12일, 의심하는자 2·5·8·11·14일
         public static readonly Post[][] Posts =
         {
             new[] { P(Starlover, "■■ ☆ ■■■ !!!", "[사진] 케이크", "[시각] 오후 3시", Hint.Full, Pure(Emo.Joy)),
                     P(Gloomcat, "■■■ ☂ ■■ ...", "[사진] 비 오는 창문", "[시각] 새벽 3시", Hint.Full, Pure(Emo.Sad)),
                     P(null, "♪ ■■■■ ✿ ■", "[사진] 꼬리 흔드는 강아지", "[반응] 웃음×20", Hint.Full, Pure(Emo.Joy)) },
-            new[] { P(Doubter, "■■ ※ ■■■■ ?", "[반응] 화남×8", "[시각] 밤 11시 50분", Hint.Full, Pure(Emo.Anger)),
-                    Or(P(Gloomcat, "■ ◎ ■■ ☂ ■", "[사진] 따뜻한 코코아", "[반응] 미소×3", Hint.Partial, Syn("괜찮은 척"), Pure(Emo.Sad)),
-                       P(Gloomcat, "◇ ■■■ ☂ ■■", "[사진] 텅 빈 의자", "[시각] 새벽 2시", Hint.Full, Pure(Emo.Sad))),
-                    P(null, "■ ☆ ■■ ◎ ■■", "[사진] 리본 달린 선물 상자", "[반응] 케이크×5", Hint.Full, Pure(Emo.Joy)) },
-            new[] { P(Starlover, "◉ ■■ ♪ ?!?!", "[사진] 네 사진만 모은 폴더", "[반응] 헉×14", Hint.Partial, Pure(Emo.Surprise), Pure(Emo.Joy)),
-                    P(null, "■■ ♡ ■■■ ..", "[사진] 손편지", "[반응] 미소×3", Hint.Full, Pure(Emo.Shy)),
-                    P(null, "▲ ■■■ ※ ■!!", "[사진] 금 간 폰 화면", "[반응] 빡침×9", Hint.Full, Pure(Emo.Anger)) },
-            new[] { P(Doubter, "■ ⁂ ■■ ※ ■?", "[사진] 확대한 네 눈", "[반응] 의심×12", Hint.None, Pure(Emo.Surprise), Pure(Emo.Anger)),
-                    Or(P(Gloomcat, "■■ ♪ ■ ∴ ~", "[사진] 다시 켠 화분 조명", "[시각] 오전 9시", Hint.Partial, Pure(Emo.Joy), Syn("괜찮은 척")),
-                       P(Gloomcat, "∴ ■■ ≈ ■■■", "[사진] 시든 꽃", "[시각] 새벽 4시", Hint.Full, Pure(Emo.Sad))),
-                    P(null, "■ ☆ ■■ ▲ ■", "[사진] 친구의 수상 소식", "[반응] 박수×30", Hint.None, Syn("질투")) },
-            new[] { Creepy(P(Starlover, "◉ ■■ ✿ ■■ !!!", "[사진] 네 사진으로 도배된 방", "[반응] 소름×40", Hint.Partial, Syn("집착"))),
-                    P(null, "∽ ■■■ ◉ ■", "[사진] 반쯤 가린 셀카", "[반응] 두근×11", Hint.Partial, Syn("두근"), Pure(Emo.Shy)),
-                    P(null, "■■ ♯ ■ ▲ ■■!!", "[사진] 구겨진 영수증", "[시각] 밤 10시", Hint.Full, Pure(Emo.Anger)) },
+            new[] { P(Doubter, "■■ ※ ■■■■ ?", "[반응] 화남×8", "[시각] 밤 11시 50분", Hint.Full, Pure(Emo.Anger)) },
+            new[] { Or(P(Gloomcat, "■ ◎ ■■ ☂ ■", "[사진] 따뜻한 코코아", "[반응] 미소×3", Hint.Partial, Syn("괜찮은 척"), Pure(Emo.Sad)),
+                       P(Gloomcat, "◇ ■■■ ☂ ■■", "[사진] 텅 빈 의자", "[시각] 새벽 2시", Hint.Full, Pure(Emo.Sad))) },
+            new[] { P(Starlover, "◉ ■■ ♪ ?!?!", "[사진] 네 사진만 모은 폴더", "[반응] 헉×14", Hint.Partial, Pure(Emo.Surprise), Pure(Emo.Joy)) },
+            new[] { P(Doubter, "■ ⁂ ■■ ※ ■?", "[사진] 확대한 네 눈", "[반응] 의심×12", Hint.None, Pure(Emo.Surprise), Pure(Emo.Anger)) },
+            new[] { Or(P(Gloomcat, "■■ ♪ ■ ∴ ~", "[사진] 다시 켠 화분 조명", "[시각] 오전 9시", Hint.Partial, Pure(Emo.Joy), Syn("괜찮은 척")),
+                       P(Gloomcat, "∴ ■■ ≈ ■■■", "[사진] 시든 꽃", "[시각] 새벽 4시", Hint.Full, Pure(Emo.Sad))) },
+            new[] { Creepy(P(Starlover, "◉ ■■ ✿ ■■ !!!", "[사진] 네 사진으로 도배된 방", "[반응] 소름×40", Hint.Partial, Syn("집착"))) },
             new[] { Or(P(Doubter, "∮ ■■■ ⊙ ?", "[사진] 정전된 거리", "[반응] 헉×20", Hint.Full, Pure(Emo.Surprise)),
-                       P(Doubter, "※ ∮ ■■ † !!", "[반응] 신고×5", "[시각] 자정", Hint.None, Pure(Emo.Anger))),
-                    Or(P(Gloomcat, "■ ◐ ■■ ✿ ..", "[사진] 무릎 위 고양이", "[반응] 간질×6", Hint.Partial, Pure(Emo.Shy), Pure(Emo.Joy)),
-                       P(Gloomcat, "≈ ■■■ ◇ ■", "[사진] 이삿짐 상자", "[시각] 새벽 1시", Hint.Full, Pure(Emo.Sad))),
-                    P(null, "♯ ■ ∽ ■■ ~", "[사진] 약속에 늦은 친구 메시지", "[반응] 흥×7", Hint.None, Syn("삐짐")) },
-            new[] { Creepy(P(Starlover, "⊙ ■ ◎ ■■ ⊙ ■■■", "[사진] 네 얼굴을 오린 가면", "[시각] 새벽 4시 44분", Hint.None, Syn("집착"))),
-                    P(null, "❀ ■■■ ◐ ■", "[사진] 커플 머그컵", "[반응] 하트×4", Hint.Full, Pure(Emo.Shy)),
-                    Or(P(Doubter, "■ † ■■ ⁂ ?!?", "[사진] 하늘의 이상한 빛", "[반응] 외계인×99", Hint.Partial, Pure(Emo.Surprise)),
+                       P(Doubter, "※ ∮ ■■ † !!", "[반응] 신고×5", "[시각] 자정", Hint.None, Pure(Emo.Anger))) },
+            new[] { Or(P(Gloomcat, "■ ◐ ■■ ✿ ..", "[사진] 무릎 위 고양이", "[반응] 간질×6", Hint.Partial, Pure(Emo.Shy), Pure(Emo.Joy)),
+                       P(Gloomcat, "≈ ■■■ ◇ ■", "[사진] 이삿짐 상자", "[시각] 새벽 1시", Hint.Full, Pure(Emo.Sad))) },
+            new[] { Creepy(P(Starlover, "⊙ ■ ◎ ■■ ⊙ ■■■", "[사진] 네 얼굴을 오린 가면", "[시각] 새벽 4시 44분", Hint.None, Syn("집착"))) },
+            new[] { Or(P(Doubter, "■ † ■■ ⁂ ?!?", "[사진] 하늘의 이상한 빛", "[반응] 외계인×99", Hint.Partial, Pure(Emo.Surprise)),
                        P(Doubter, "† ※ ■■ † !!!", "[반응] 박제×50", "[시각] 새벽 5시", Hint.None, Pure(Emo.Anger))) },
+            new[] { Or(P(Gloomcat, "■■ ♪ ■ ■■ ∴ ■!", "[사진] 동네 공원 벤치", "[시각] 오후 1시", Hint.Partial, Pure(Emo.Joy), Syn("괜찮은 척")),
+                       P(Gloomcat, "≈ ■■ ■■ ☂ …", "[사진] 닫힌 커튼", "[시각] 새벽 3시", Hint.Full, Pure(Emo.Sad))) },
+            new[] { P(Starlover, "♡ ■■■ ■ ◉ ■■ ..!", "[사진] 1년 전 첫 댓글 캡처", "[반응] 두근×31", Hint.Partial, Pure(Emo.Shy), Syn("두근")) },
+            new[] { Or(P(Doubter, "♯ ■■ ■■■ ∽ ■", "[사진] 관찰 기록으로 가득한 메모장", "[시각] 밤 12시", Hint.None, Syn("삐짐"), Pure(Emo.Anger)),
+                       P(Doubter, "† ■■ ■■ ※ !!!", "[반응] 박제×80", "[시각] 새벽 5시", Hint.None, Pure(Emo.Anger))) },
+            new Post[0],
+        };
+
+        // 예전에 날짜별로 넣었던 지나가는 팬 글: 이제 글 풀로 간다
+        static readonly Post[] ExtraPool =
+        {
+            P(null, "■ ☆ ■■ ◎ ■■", "[사진] 리본 달린 선물 상자", "[반응] 케이크×5", Hint.Full, Pure(Emo.Joy)),
+            P(null, "■■ ♡ ■■■ ..", "[사진] 손편지", "[반응] 미소×3", Hint.Full, Pure(Emo.Shy)),
+            P(null, "▲ ■■■ ※ ■!!", "[사진] 금 간 폰 화면", "[반응] 빡침×9", Hint.Full, Pure(Emo.Anger)),
+            P(null, "■ ☆ ■■ ▲ ■", "[사진] 친구의 수상 소식", "[반응] 박수×30", Hint.None, Syn("질투")),
+            P(null, "∽ ■■■ ◉ ■", "[사진] 반쯤 가린 셀카", "[반응] 두근×11", Hint.Partial, Syn("두근"), Pure(Emo.Shy)),
+            P(null, "■■ ♯ ■ ▲ ■■!!", "[사진] 구겨진 영수증", "[시각] 밤 10시", Hint.Full, Pure(Emo.Anger)),
+            P(null, "♯ ■ ∽ ■■ ~", "[사진] 약속에 늦은 친구 메시지", "[반응] 흥×7", Hint.None, Syn("삐짐")),
+            P(null, "❀ ■■■ ◐ ■", "[사진] 커플 머그컵", "[반응] 하트×4", Hint.Full, Pure(Emo.Shy)),
+        };
+        static readonly string[] ExtraPlains =
+        {
+            "선물 받았다 너무 신나", "손편지 받았는데 부끄러워..", "폰 액정 또 깨졌어 진짜 짜증나!!", "친구가 상 받았대 축하해… 축하해",
+            "셀카 올렸는데 심장이 터질 것 같아", "영수증 보니 바가지였어!!", "약속에 또 늦었어 흥", "커플 머그컵 샀어 히히",
         };
 
         // 보류한 글은 다음 밤 서운함이 섞인 후속 글로 돌아온다
@@ -335,19 +420,35 @@ namespace Kaomoji
             Plain = "왜 어제 답 안 해 줬어…?",
         };
 
+        public static Post MisuseFollowup(Post original, string face, int day, int n)
+        {
+            var scene = original.Clues[0].Replace("[사진] ", "");
+            var plain = $"{scene} 사진에 네 얼굴 붙였어! 이거 맞지?";
+            return new Post
+            {
+                Id = $"m{day}_{n}", Author = original.Author, Plain = $"{scene} 사진에 네 얼굴 {face} 붙였어! 이거 맞지?",
+                Text = face + " " + Scramble(plain, original.Answers, plain.Sum(c => c)),
+                Clues = new[] { $"[사진] {scene}에 붙은 {face}", "[반응] 갸웃×7" },
+                Hint = Hint.Partial, Answers = original.Answers, Misuse = face,
+            };
+        }
+
         static readonly Dictionary<string, string> Plains = new()
         {
             ["d1p0"] = "오늘 생일이라 케이크 먹었어!!", ["d1p1"] = "비가 와서 하루 종일 우울해...", ["d1p2"] = "우리 강아지가 꼬리를 흔들어 줬어",
-            ["d2p0"] = "너 왜 매일 같은 시간에만 올려?", ["d2p1"] = "코코아 마시니까 조금 괜찮아졌어", ["d2p1b"] = "아무도 내 얘기 안 들어줘",
-            ["d2p2"] = "선물 받았다 너무 신나",
-            ["d3p0"] = "네 사진 벌써 백 장 모았어?!", ["d3p1"] = "손편지 받았는데 부끄러워..", ["d3p2"] = "폰 액정 또 깨졌어 진짜 짜증나!!",
-            ["d4p0"] = "확대해 보니까 눈이 이상한데?", ["d4p1"] = "화분에 다시 불 켜 봤어", ["d4p1b"] = "꽃이 다 시들었어",
-            ["d4p2"] = "친구가 상 받았대 축하해… 축하해",
-            ["d5p0"] = "방을 네 사진으로 다 채웠어!!!", ["d5p1"] = "셀카 올렸는데 심장이 터질 것 같아", ["d5p2"] = "영수증 보니 바가지였어!!",
-            ["d6p0"] = "정전된 날에도 글이 올라왔잖아?", ["d6p0b"] = "신고할 거야. 넌 사람이 아니야!!",
-            ["d6p1"] = "고양이가 무릎에 올라왔어..", ["d6p1b"] = "이사 가기 싫어", ["d6p2"] = "약속에 또 늦었어 흥",
-            ["d7p0"] = "네 얼굴 가면 만들었어 보여줄까", ["d7p1"] = "커플 머그컵 샀어 히히",
-            ["d7p2"] = "하늘에 이상한 빛이 떴어?!", ["d7p2b"] = "다 박제해 뒀어. 끝이야!!!",
+            ["d2p0"] = "너 왜 매일 같은 시간에만 올려?",
+            ["d3p0"] = "코코아 마시니까 조금 괜찮아졌어", ["d3p0b"] = "아무도 내 얘기 안 들어줘",
+            ["d4p0"] = "네 사진 벌써 백 장 모았어?!",
+            ["d5p0"] = "확대해 보니까 눈이 이상한데?",
+            ["d6p0"] = "화분에 다시 불 켜 봤어", ["d6p0b"] = "꽃이 다 시들었어",
+            ["d7p0"] = "방을 네 사진으로 다 채웠어!!!",
+            ["d8p0"] = "정전된 날에도 글이 올라왔잖아?", ["d8p0b"] = "신고할 거야. 넌 사람이 아니야!!",
+            ["d9p0"] = "고양이가 무릎에 올라왔어..", ["d9p0b"] = "이사 가기 싫어",
+            ["d10p0"] = "네 얼굴 가면 만들었어 보여줄까",
+            ["d11p0"] = "하늘에 이상한 빛이 떴어?!", ["d11p0b"] = "다 박제해 뒀어. 끝이야!!!",
+            ["d12p0"] = "오늘 처음으로 밖에 나가 봤어 생각보다 괜찮아", ["d12p0b"] = "이제 아무것도 안 할래…",
+            ["d13p0"] = "처음 팔로우한 날 기억해? 그때 첫 댓글 아직 캡처해 뒀어..!",
+            ["d14p0"] = "내가 틀렸을지도 몰라. 그래도 계속 지켜볼 거야", ["d14p0b"] = "네 정체 다 알아냈어. 곧 터뜨린다!!!",
         };
 
         // ---------- 멘션 글 풀 ----------
@@ -375,23 +476,23 @@ J|월급날이다 치킨 시킨다|[사진] 치킨 상자|[반응] 침×22|F
 J|화분에 꽃이 처음 폈어|[사진] 작은 꽃봉오리|[반응] 축하×7|P
 J|오랜만에 푹 잤다 개운해|[사진] 햇살 든 이불|[시각] 오전 10시|P
 S|오늘도 혼자 밥 먹었어|[사진] 편의점 도시락 하나|[시각] 밤 9시|F
-S|키우던 햄스터가 떠났어|[사진] 빈 쳇바퀴|[반응] 눈물×33|F
-S|면접 또 떨어졌다|[사진] 구겨진 정장|[시각] 오후 6시|F
+S|키우던 햄스터가 떠났어|[사진] 빈 쳇바퀴|[반응] 눈물×33|F|L
+S|면접 또 떨어졌다|[사진] 구겨진 정장|[시각] 오후 6시|F|L
 S|이사 가는 친구 배웅했어|[사진] 떠나는 트럭|[반응] 눈물×8|P
 S|비 오는데 우산 잃어버렸어|[사진] 젖은 신발|[시각] 밤 10시|F
-S|할머니 집 팔렸대|[사진] 오래된 대문|[반응] 눈물×12|P
-S|아무도 내 생일 몰랐어|[사진] 초 하나 꽂은 빵|[시각] 자정|F
-S|좋아하던 가게가 문 닫았어|[사진] 임대 문의 종이|[반응] 슬픔×20|P
+S|할머니 집 팔렸대|[사진] 오래된 대문|[반응] 눈물×12|P|L
+S|아무도 내 생일 몰랐어|[사진] 초 하나 꽂은 빵|[시각] 자정|F|L
+S|좋아하던 가게가 문 닫았어|[사진] 임대 문의 종이|[반응] 슬픔×20|P|L
 S|폰 사진이 다 날아갔어|[사진] 텅 빈 앨범|[시각] 새벽 2시|N
 S|연락이 끊긴 친구 꿈을 꿨어|[사진] 흐릿한 단체 사진|[시각] 새벽 5시|P
 S|키링 줄이 끊어졌어|[사진] 떨어진 키링|[반응] 토닥×3|P
 S|휴가 끝났다 내일 출근|[사진] 캐리어|[시각] 일요일 밤|F
-S|동생이 군대 갔어|[사진] 빈 방 침대|[반응] 토닥×15|F
+S|동생이 군대 갔어|[사진] 빈 방 침대|[반응] 토닥×15|F|L
 S|오늘따라 집이 너무 조용해|[사진] 꺼진 TV|[시각] 밤 12시|P
-A|택배 또 분실됐어!!|[사진] 빈 현관|[반응] 화남×14|F
+A|택배 또 분실됐어!!|[사진] 빈 현관|[반응] 화남×14|F|L
 A|층간소음 새벽 세 시에 실화냐|[사진] 천장|[시각] 새벽 3시|F
 A|지하철에서 발 밟고 사과도 안 해|[사진] 밟힌 운동화|[반응] 빡침×22|F
-A|조별과제 나만 했어!!|[사진] 혼자 쓴 보고서|[반응] 분노×40|F
+A|조별과제 나만 했어!!|[사진] 혼자 쓴 보고서|[반응] 분노×40|F|L
 A|배달 음식 반이 쏟아져서 왔어|[사진] 엎어진 짜장면|[반응] 화남×9|F
 A|게임 마지막 판에 렉 걸림|[사진] 멈춘 화면|[시각] 새벽 1시|P
 A|새치기하고 모른 척하더라|[사진] 긴 줄|[반응] 빡침×17|F
@@ -399,7 +500,7 @@ A|와이파이 비번 누가 바꿨어!!|[사진] 연결 안 됨|[반응] 화남
 A|우산 빌려 갔는데 안 돌려줌|[사진] 빈 우산꽂이|[반응] 분노×11|P
 A|알람 끄고 다시 잠들었다 망했어|[사진] 지각 문자|[시각] 오전 9시 40분|N
 A|에어컨 고장 났는데 수리 일주일 뒤래|[사진] 땀범벅 선풍기|[반응] 분노×19|F
-A|친구가 스포했어!!!|[사진] 영화 티켓|[반응] 분노×28|F
+A|친구가 스포했어!!!|[사진] 영화 티켓|[반응] 분노×28|F|L
 A|주차 자리에 누가 짐을 쌓아 놨어|[사진] 막힌 주차칸|[반응] 화남×10|F
 A|회의가 또 연장됐어|[사진] 꽉 찬 일정표|[시각] 오후 8시|P
 U|길에서 연예인 봤어!!|[사진] 흔들린 뒷모습|[반응] 헉×60|F
@@ -409,7 +510,7 @@ U|우리 집 고양이가 문을 열었어?!|[사진] 열린 문|[반응] 헉×2
 U|시험 범위가 바뀌었대?!|[사진] 공지 캡처|[시각] 시험 전날 밤|P
 U|하늘에 무지개가 두 개야|[사진] 쌍무지개|[반응] 와×44|F
 U|십 년 전 일기장을 찾았어|[사진] 낡은 공책|[반응] 헉×10|N
-U|엘리베이터에 갇혔었어!!|[사진] 비상벨|[반응] 헉×23|F
+U|엘리베이터에 갇혔었어!!|[사진] 비상벨|[반응] 헉×23|F|L
 U|산 지 하루 만에 할인함|[사진] 가격표 두 장|[반응] 헉×15|P
 U|우리 동네에 외계인 목격담이?!|[사진] 흐린 빛 사진|[반응] 외계인×88|F
 U|유리컵이 혼자 깨졌어?!|[사진] 깨진 컵|[반응] 소름×12|P
@@ -417,9 +518,9 @@ U|택배 상자에 다른 사람 물건이?!|[사진] 모르는 인형|[반응] 
 U|지갑에서 오만 원이 나왔어?!|[사진] 접힌 지폐|[반응] 헉×14|F
 U|옆집이 우리 고모였대|[사진] 현관문 두 개|[반응] 헉×31|P
 H|짝사랑한테 인사받았어..|[사진] 떨리는 손|[반응] 두근×12|F
-H|발표 때 목소리 떨렸어|[사진] 발표 자료|[반응] 토닥×6|P
+H|발표 때 목소리 떨렸어|[사진] 발표 자료|[반응] 토닥×6|P|L
 H|칭찬받았는데 뭐라 할지 몰랐어|[사진] 칭찬 스티커|[반응] 미소×9|F
-H|넘어졌는데 다들 봤어..|[사진] 무릎 밴드|[반응] 웃음×13|P
+H|넘어졌는데 다들 봤어..|[사진] 무릎 밴드|[반응] 웃음×13|P|L
 H|첫 영상 올렸어 봐 줘..|[사진] 업로드 화면|[반응] 응원×20|F
 H|노래방에서 고음 삑사리 났어|[사진] 마이크|[반응] 웃음×31|P
 H|잘못 보낸 문자 읽음 표시 떴다|[사진] 메신저 화면|[시각] 밤 12시|F
@@ -469,6 +570,22 @@ S+H|발표 망쳐서 숨고 싶어|[사진] 이불 속|[시각] 밤 11시|P
 G+J|친구 결혼식 다녀왔어 행복해 보이더라|[사진] 부케|[반응] 축하×30|N
 J+T|이사 끝! 허리는 나갔지만 좋아|[사진] 쌓인 상자|[반응] 토닥×10|P
 U+A|월세가 또 오른대?!|[사진] 고지서|[반응] 헉×24|P
+S>J|시험 망친 날엔 □ 얼굴이었는데 떡볶이 먹고 □ 얼굴이 됐어|[사진] 빈 떡볶이 접시|[시각] 밤 9시|P
+A>J|택배 늦어서 □ 얼굴이었는데 덤으로 사탕이 와서 □ 얼굴|[사진] 사탕 한 봉지|[반응] 웃음×8|P
+J>S|아침엔 □ 얼굴로 나갔는데 소나기 맞고 □ 얼굴로 들어왔어|[사진] 젖은 우산|[시각] 오후 6시|P
+U>H|고백받고 □ 얼굴이 됐다가 친구들이 봐서 □ 얼굴|[사진] 쪽지|[반응] 꺄×20|P
+S>A|강아지 아파서 □ 얼굴이었는데 동생이 놀려서 □ 얼굴|[사진] 동물병원|[시각] 밤 10시|N
+H>J|발표 전엔 □ 얼굴이었는데 박수받고 □ 얼굴|[사진] 발표 자료|[반응] 박수×15|P
+A>U|새치기당해서 □ 얼굴이었는데 그게 아는 사람이라 □ 얼굴|[사진] 긴 줄|[반응] 헉×9|N
+J>A|월급날이라 □ 얼굴이었는데 카드값 보고 □ 얼굴|[사진] 카드 명세서|[시각] 오후 7시|P
+U>S|복권 맞은 줄 알고 □ 얼굴이었는데 지난주 거라 □ 얼굴|[사진] 복권|[반응] 토닥×12|N
+S>H|혼자 영화 보러 가서 □ 얼굴이었는데 옆자리가 짝사랑이라 □ 얼굴|[사진] 영화표 두 장|[시각] 밤 8시|P
+H>A|넘어져서 □ 얼굴이었는데 친구가 영상 찍어서 □ 얼굴|[사진] 무릎 밴드|[반응] 웃음×30|P
+J>U|생일이라 □ 얼굴이었는데 문 열자 다들 숨어 있어서 □ 얼굴|[사진] 고깔모자|[반응] 헉×18|P
+A>S|동생이랑 싸워서 □ 얼굴이었는데 동생이 울어서 □ 얼굴|[사진] 반쪽 난 과자|[시각] 오후 5시|N
+U>J|정전돼서 □ 얼굴이었는데 별이 쏟아져서 □ 얼굴|[사진] 별 사진|[반응] 와×25|P
+H>S|칭찬받고 □ 얼굴이었는데 그게 마지막 출근이라 □ 얼굴|[사진] 꽃다발|[시각] 오후 6시|N
+S>U|휴가 끝나 □ 얼굴이었는데 비행기가 하루 밀려서 □ 얼굴|[사진] 결항 안내판|[반응] 헉×14|P
 ";
 
         // 팔로워가 늘어 다들 카오모지로만 말하기 시작하면, 그걸 이상하게 여기는 사람들의 글 (밤마다 하나씩 섞인다)
@@ -498,8 +615,10 @@ U|길거리 간판이 전부 얼굴로 바뀌었어|[사진] 얼굴 간판|[반�
         // 실제 문장 → 깨진 글: 낱말마다 ■(길이 1~4)에 끝의 !?… 은 남기고, 정답 감정의 기호를 한두 개 섞는다
         static string Scramble(string plain, Answer[] answers, int seed)
         {
-            var words = plain.Split(' ').Take(6).Select(w =>
+            bool blank = plain.Contains('□'); // 빈칸 긴 글은 빈칸(□)을 그대로 두고 더 길게
+            var words = plain.Split(' ').Take(blank ? 11 : 6).Select(w =>
             {
+                if (w == "□") return w;
                 int cut = w.Length;
                 while (cut > 0 && "!?….~ㅋㅎ".IndexOf(w[cut - 1]) >= 0) cut--;
                 return new string('■', Math.Clamp(cut, 1, 4)) + w.Substring(cut);
@@ -507,7 +626,7 @@ U|길거리 간판이 전부 얼굴로 바뀌었어|[사진] 얼굴 간판|[반�
             var emos = answers.SelectMany(a => new[] { a.Eye, a.Mouth }).Where(e => e != Emo.Neutral).Distinct().ToList();
             for (int k = 0; k < emos.Count; k++)
             {
-                var symbols = Sym.Where(x => x.Value == emos[k]).Select(x => x.Key).ToList();
+                var symbols = Sym.Where(x => x.Value == emos[k] && !SecondSet.Contains(x.Key)).Select(x => x.Key).ToList(); // 첫 세트로 쓴다
                 words.Insert((seed + k * 2) % (words.Count + 1), symbols[(seed / 3 + k) % symbols.Count]);
             }
             return string.Join(" ", words);
@@ -519,12 +638,17 @@ U|길거리 간판이 전부 얼굴로 바뀌었어|[사진] 얼굴 간판|[반�
             foreach (var line in table.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0))
             {
                 var f = line.Split('|');
-                var answers = f[0].Split('+').Select(c => Codes[c[0]]).ToArray();
+                // 빈칸 긴 글은 'S>J'처럼 첫 빈칸>둘째 빈칸
+                var parts = f[0].Split('>');
+                var answers = parts[0].Split('+').Select(c => Codes[c[0]]).ToArray();
+                var answers2 = parts.Length > 1 ? parts[1].Split('+').Select(c => Codes[c[0]]).ToArray() : null;
                 var hint = f[4] == "F" ? Hint.Full : f[4] == "P" ? Hint.Partial : Hint.None;
                 var post = P(null, null, f[2], f[3], hint, answers);
+                post.Answers2 = answers2;
+                post.Literal = f.Length > 5 && f[5] == "L";
                 post.Id = $"{idPrefix}{n++}";
                 post.Plain = f[1];
-                post.Text = Scramble(f[1], answers, f[1].Sum(c => c));
+                post.Text = Scramble(f[1], answers2 == null ? answers : answers.Concat(answers2).ToArray(), f[1].Sum(c => c));
                 post.WantsCreepy = f[0] == "O"; // 집착 글은 섬뜩한 답장도 반긴다
                 yield return post;
             }
@@ -541,7 +665,8 @@ U|길거리 간판이 전부 얼굴로 바뀌었어|[사진] 얼굴 간판|[반�
                 }
 
             // 풀: 직접 쓴 지나가는 팬 글 + 표에서 만든 글
-            Pool.AddRange(Posts.SelectMany(d => d).Where(p => p.Author == null));
+            for (int i = 0; i < ExtraPool.Length; i++) { ExtraPool[i].Id = $"x{i}"; ExtraPool[i].Plain = ExtraPlains[i]; }
+            Pool.AddRange(ExtraPool);
             Pool.AddRange(ParseTable(PoolTable, "r"));
             Uneasy.AddRange(ParseTable(UneasyTable, "u"));
             foreach (var p in Uneasy) p.Holdout = true;
