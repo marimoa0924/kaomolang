@@ -130,7 +130,8 @@ namespace Kaomoji
                 new("eyes", "낮에는 눈만 본다.\n어울리는 눈을 골라 보자.", () => selEye != Emo.Neutral || !Morning()),
                 new("react", "반응하자!\n성공이든 실패든 상대의 입을 얻는다.", () => enc != null || !Morning()),
                 new("close_result", "결과를 봤으면 × 로 창을 닫자.\n창을 닫아야 시간이 흐른다.", () => !Morning()),
-                new("icon_home", "오후다. 한 번 더 움직이자.\n[외출]이나 [집]에서 하나를 하고\n창을 닫으면 밤이 된다.", () => S.IsNight),
+                new("icon_home", "오후다. 한 번 더 움직이자.\n[외출]이나 [집]에서 하나를 하고\n창을 닫으면 밤이 된다.", () => S.IsNight || open.Contains(Win.Home)),
+                new("home_cards", "집에서는 쉬면서 피로(~)가 내려간다.\n오른쪽 숫자만큼. 낮잠이 가장 많이 내린다.", () => S.IsNight || homeResult != null, true, () => open.Contains(Win.Home)),
                 new("icon_sns", "밤이다.\n[SNS]를 열자.", () => open.Contains(Win.Sns) || S.NightDone || PastDay1(), false, () => S.IsNight),
                 new("nb", "SNS를 열면 [해독 수첩]이 옆에 같이 열린다.\n감각의 이름·색·모양은 여기서만 본다.", () => S.Replies[0] != null || PastDay1(), true),
                 new("upload", "먼저 내 게시물. 사진 속 장면을 읽고\n어울리는 얼굴을 골라 [▣ 게시].", () => S.Uploaded || PastDay1()),
@@ -931,10 +932,13 @@ namespace Kaomoji
             }
             else
             {
+                GUILayout.BeginVertical();
                 HomeCard("○", "거울 연습", Balance.FatHome, Mirror, "눈과 입을 다른 감정으로 섞어 본다.\n말이 되는 조합(시너지)이면 성공, 수첩에 남는다.");
                 Mark("home_mirror");
                 HomeCard("((•))", "피드 구경", Balance.FatHome, Peek, "오늘 밤 팬 글 하나를\n미리 보고 색 단서를 받는다.");
-                HomeCard("zZ", "낮잠", Balance.FatNap, Nap, $"크게 쉰다. 의심도 {Balance.NapSus}.");
+                HomeCard("zZ", "낮잠", Balance.FatNap, Nap, $"크게 쉰다. 의심도 {Balance.NapSus}.", $"!? {Balance.NapSus:+0;-0}");
+                GUILayout.EndVertical();
+                Mark("home_cards");
             }
             GUILayout.EndVertical();
 
@@ -943,11 +947,25 @@ namespace Kaomoji
         }
 
         float homeT;
-        void HomeCard(string icon, string name, float fat, Action act, string help)
+        void HomeCard(string icon, string name, float fat, Action act, string help, string extra = null)
         {
             Btn($"<size=26>{icon}</size>   <size=16>{name}</size>", act, true, cardBtn, GUILayout.Height(74));
+            var r = GUILayoutUtility.GetLastRect();
             HoverFat(fat);
             Explain(help);
+            // 쉬면서 피로가 내려간다는 걸 늘 보이게: 카드 오른쪽에 효과 배지
+            var badge = $"~ {fat:+0;-0}" + (extra != null ? $"  {extra}" : "");
+            var bs = new GUIStyle(clockOn) { font = dot, fontSize = 16, padding = new RectOffset(8, 8, 2, 2) };
+            var w = bs.CalcSize(new GUIContent(badge)).x;
+            GUI.Label(new Rect(r.xMax - w - 10, r.center.y - 13, w, 26), badge, bs);
+        }
+
+        // 집 활동 결과에 쉬어서 내려간 수치를 한 줄로
+        string RestLine((int f, float s, float fat) b)
+        {
+            var parts = new List<string> { $"~ 피로 {Mathf.RoundToInt(S.Fat - b.fat):+0;-0}" };
+            if (Mathf.RoundToInt(S.Sus - b.s) != 0) parts.Add($"!? 의심 {Mathf.RoundToInt(S.Sus - b.s):+0;-0}");
+            return string.Join("   ", parts);
         }
 
         void HomeDone(string stamp, string face, string sub = null) { homeResult = (stamp, face, sub); homeT = Time.time; }
@@ -959,11 +977,11 @@ namespace Kaomoji
             var (syn, isNew) = S.DoMirror(selEye, selMouth);
             Floats(before);
             if (syn == null)
-                HomeDone("실패", face, selEye == selMouth
+                HomeDone("실패", face, (selEye == selMouth
                     ? "눈과 입이 같은 감정이다.\n눈과 입을 다르게 섞어 보자."
-                    : $"{E[selEye].Name} 눈과 {E[selMouth].Name} 입은 어울리지 않는다.");
+                    : $"{E[selEye].Name} 눈과 {E[selMouth].Name} 입은 어울리지 않는다.") + "\n" + RestLine(before));
             else
-                HomeDone("성공", face, isNew ? $"새 시너지 '{syn.Name}'!\n수첩에 기록했다." : $"'{syn.Name}' 얼굴. 이미 아는 시너지다.");
+                HomeDone("성공", face, (isNew ? $"새 시너지 '{syn.Name}'!\n수첩에 기록했다." : $"'{syn.Name}' 얼굴. 이미 아는 시너지다.") + "\n" + RestLine(before));
             if (isNew) diary.Add(new Sticker($"+{face}", E[selEye].Color));
         }
 
@@ -972,7 +990,7 @@ namespace Kaomoji
             var before = Snap();
             int i = S.DoPeek();
             Floats(before);
-            HomeDone("구경", null);
+            HomeDone("구경", null, RestLine(before));
             diary.Add(new Sticker("((•))", Pal.Bubble));
             if (i < 0) return;
             var p = S.Tonight[i];
@@ -984,7 +1002,7 @@ namespace Kaomoji
             var before = Snap();
             S.DoNap();
             Floats(before);
-            HomeDone("꿀잠", null);
+            HomeDone("꿀잠", null, RestLine(before));
             diary.Add(new Sticker("zZ", Pal.Bubble));
         }
 
