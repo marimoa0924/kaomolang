@@ -86,6 +86,17 @@ namespace Kaomoji.Tests
         }
 
         [Test]
+        public void UneasyPostsAppearWhenFollowersGrow()
+        {
+            var s = new GameState(3);
+            Assert.IsFalse(s.Tonight.Any(p => p.Holdout));
+            s.Followers = (int)(Balance.FollowerGoal * Balance.UneasyFrom);
+            s.EndNight();
+            Assert.AreEqual(1, s.Tonight.Count(p => p.Holdout)); // 밤마다 하나
+            Assert.AreEqual(Balance.PostsPerNight, s.Tonight.Count);
+        }
+
+        [Test]
         public void HeldPostReturnsAsFollowup()
         {
             var s = new GameState(1);

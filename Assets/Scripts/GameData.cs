@@ -19,6 +19,7 @@ namespace Kaomoji
     {
         public const int Days = 7; // shortcut: 프로토타입 7일, 정식판 30일. 단골 이야기는 7일치뿐이고 나머지는 글 풀이 채운다
         public const int PostsPerNight = 3;
+        public const float UneasyFrom = 0.5f; // 팔로워가 목표의 이만큼이면 '이상하다'는 글이 섞이기 시작
         public const int FollowerGoal = 5000; // shortcut: 가안, 다음 플레이테스트로 조정
         // 쉬지 않으면 하루 약 +30 (외출 2번 30 + 답장 3개 12 - 잠 12): 나흘째쯤 멘탈붕괴. 휴식을 두세 번은 골라야 한다
         public const float FatOut = 15, FatOutMimic = 8, FatReply = 4, FatSleep = -12, FatHome = -5, FatNap = -30;
@@ -91,6 +92,7 @@ namespace Kaomoji
         public Hint Hint;
         public Answer[] Answers;
         public bool WantsCreepy;
+        public bool Holdout; // 다들 카오모지로만 말하는 걸 이상하게 여기는 사람: 끝까지 글자로 쓴다
         public Post Bad; // 단골이 지난 답장에 서운하면 대신 오는 글
     }
 
@@ -468,6 +470,22 @@ J+T|이사 끝! 허리는 나갔지만 좋아|[사진] 쌓인 상자|[반응] �
 U+A|월세가 또 오른대?!|[사진] 고지서|[반응] 헉×24|P
 ";
 
+        // 팔로워가 늘어 다들 카오모지로만 말하기 시작하면, 그걸 이상하게 여기는 사람들의 글 (밤마다 하나씩 섞인다)
+        const string UneasyTable = @"
+U|요즘 다들 왜 말 대신 얼굴만 보내?|[사진] 카오모지로 가득한 단톡방|[반응] 헉×13|P
+S|친구가 더 이상 글자로 대답을 안 해|[사진] 얼굴만 쌓인 메신저|[시각] 새벽 2시|P
+A|회사 공지까지 카오모지로 왔어 이게 맞아?|[사진] 얼굴 한 줄짜리 공지|[반응] 화남×20|F
+U+S|엄마가 내 이름 대신 얼굴만 보내|[사진] 엄마의 메시지|[시각] 밤 11시|N
+S|나만 아직 글자를 쓰는 것 같아 무서워|[사진] 혼자 쓴 긴 글|[반응] 없음|N
+A+U|이거 다 저 계정 때문 아니야?|[사진] 네 프로필 캡처|[반응] 의심×44|P
+U|뉴스 앵커가 오늘 한마디도 안 했어|[사진] 웃기만 하는 앵커|[반응] 헉×50|P
+S+T|괜찮아 나도 곧 따라 하게 되겠지|[사진] 얼굴로 가득한 연습장|[시각] 새벽 4시|N
+A|글자를 쓰면 다들 이상하게 쳐다봐|[사진] 지하철 사람들의 같은 표정|[반응] 화남×9|P
+U|길거리 간판이 전부 얼굴로 바뀌었어|[사진] 얼굴 간판|[반응] 헉×70|P
+";
+
+        public static readonly List<Post> Uneasy = new();
+
         public static readonly List<Post> Pool = new();
 
         static readonly Dictionary<char, Answer> Codes = new()
@@ -494,6 +512,23 @@ U+A|월세가 또 오른대?!|[사진] 고지서|[반응] 헉×24|P
             return string.Join(" ", words);
         }
 
+        static IEnumerable<Post> ParseTable(string table, string idPrefix)
+        {
+            int n = 0;
+            foreach (var line in table.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0))
+            {
+                var f = line.Split('|');
+                var answers = f[0].Split('+').Select(c => Codes[c[0]]).ToArray();
+                var hint = f[4] == "F" ? Hint.Full : f[4] == "P" ? Hint.Partial : Hint.None;
+                var post = P(null, null, f[2], f[3], hint, answers);
+                post.Id = $"{idPrefix}{n++}";
+                post.Plain = f[1];
+                post.Text = Scramble(f[1], answers, f[1].Sum(c => c));
+                post.WantsCreepy = f[0] == "O"; // 집착 글은 섬뜩한 답장도 반긴다
+                yield return post;
+            }
+        }
+
         static GameData()
         {
             for (int d = 0; d < Posts.Length; d++)
@@ -506,20 +541,9 @@ U+A|월세가 또 오른대?!|[사진] 고지서|[반응] 헉×24|P
 
             // 풀: 직접 쓴 지나가는 팬 글 + 표에서 만든 글
             Pool.AddRange(Posts.SelectMany(d => d).Where(p => p.Author == null));
-            int n = 0;
-            foreach (var line in PoolTable.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0))
-            {
-                var f = line.Split('|');
-                var answers = f[0].Split('+').Select(c => Codes[c[0]]).ToArray();
-                var hint = f[4] == "F" ? Hint.Full : f[4] == "P" ? Hint.Partial : Hint.None;
-                var post = P(null, null, f[2], f[3], hint, answers);
-                post.Id = $"r{n}";
-                post.Plain = f[1];
-                post.Text = Scramble(f[1], answers, f[1].Sum(c => c));
-                post.WantsCreepy = f[0] == "O"; // 집착 글은 섬뜩한 답장도 반긴다
-                Pool.Add(post);
-                n++;
-            }
+            Pool.AddRange(ParseTable(PoolTable, "r"));
+            Uneasy.AddRange(ParseTable(UneasyTable, "u"));
+            foreach (var p in Uneasy) p.Holdout = true;
         }
 
         public static readonly Dictionary<Ending, (string title, string text)> Endings = new()

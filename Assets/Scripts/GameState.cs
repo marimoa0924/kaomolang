@@ -37,7 +37,7 @@ namespace Kaomoji
         public ReplyState[] Replies = Array.Empty<ReplyState>();
         Post heldPost;
         readonly List<Post> poolOrder;
-        int poolNext;
+        int poolNext, uneasyNext;
 
         public Encounter Pending; // 외출해서 지금 마주한 이벤트
         public string PendingPlace { get; private set; }
@@ -185,6 +185,13 @@ namespace Kaomoji
             var regulars = Day <= Posts.Length ? Posts[Day - 1].Where(p => p.Author != null) : Enumerable.Empty<Post>();
             Tonight = regulars.Select(p => p.Bad != null && RegularHappy.TryGetValue(p.Author, out var ok) && !ok ? p.Bad : p).ToList();
             while (Tonight.Count < Balance.PostsPerNight && poolNext < poolOrder.Count) Tonight.Add(poolOrder[poolNext++]);
+            // 팔로워가 늘어 다들 카오모지로만 말하기 시작하면, 그걸 이상하게 여기는 글이 밤마다 하나씩 끼어든다
+            if (Followers >= Balance.FollowerGoal * Balance.UneasyFrom && uneasyNext < Uneasy.Count)
+            {
+                int slot = Tonight.FindLastIndex(p => p.Author == null);
+                if (slot >= 0) Tonight[slot] = Uneasy[uneasyNext++];
+                else Tonight.Add(Uneasy[uneasyNext++]);
+            }
             if (heldPost != null) Tonight.Add(Followup(heldPost, Day));
             heldPost = null;
             Replies = new ReplyState[Tonight.Count];

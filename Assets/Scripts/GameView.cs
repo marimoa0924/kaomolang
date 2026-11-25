@@ -1133,7 +1133,7 @@ namespace Kaomoji
             bool color = post.Hint != Hint.None && (forceColor || S.ShowsColor(post));
             int tinted = !color ? 0 : post.Hint == Hint.Full ? tokens.Length : tokens.Length / 2;
             var hue = post.Answers[0].Eye;
-            GUILayout.Label($"{(post.Id.StartsWith("f") ? "→ " : "")}{Handle(post)}", new GUIStyle(dotStyle) { fontSize = 14 });
+            GUILayout.Label($"{(post.Id.StartsWith("f") ? "→ " : "")}{(Conform >= 0.9f && !post.Holdout ? Mimic : Handle(post))}", new GUIStyle(dotStyle) { fontSize = 14 });
             // 글 조각을 모아 두었다가 폭(maxW)을 넘으면 다음 줄로: 가로 스크롤이 생기지 않게
             var items = new List<(string text, GUIStyle style, Action after)>();
             if (color) items.Add(($"{E[hue].Shape}?", chips[hue], () => HoverEmo(hue)));
@@ -1147,7 +1147,12 @@ namespace Kaomoji
                 KaoBefore(k);
                 var t = tokens[k];
                 bool tint = k < tinted;
-                if (!Sym.TryGetValue(t, out var e)) { items.Add((t, tint ? tintText[hue] : postStyle, tint ? () => HoverEmo(hue) : null)); continue; }
+                if (!Sym.TryGetValue(t, out var e))
+                {
+                    if (!post.Holdout && Replaced(seed, k)) { items.Add((CrowdFace(seed + k), postStyle, null)); continue; } // 낱말 대신 얼굴
+                    items.Add((t, tint ? tintText[hue] : postStyle, tint ? () => HoverEmo(hue) : null));
+                    continue;
+                }
                 bool mark = firstSym && i >= 0;
                 firstSym = false;
                 // 해독한 기호는 그 감각의 색으로만. 이름은 수첩에서
@@ -1175,13 +1180,28 @@ namespace Kaomoji
         static readonly string[] FanFaces = { "(・_・)ノ", "(・o・)", "(・∀・)", "(・ｪ・)", "(・.・)", "ヽ(・_・)ノ" };
 
         // 팔로워 비율만큼 실제 문장의 글자가 읽힌다 (글자마다 정해진 순서로 하나씩 풀린다)
-        string Reveal(Post p) => Censor(p.Plain, p.Id.Sum(c => c));
+        string Reveal(Post p) => Censor(p.Plain, p.Id.Sum(c => c), p.Holdout);
 
         // 한글만 가린다(기호와 카오모지는 그대로). 팔로워 비율만큼 정해진 순서로 풀린다
-        string Censor(string text, int seed)
+        string Censor(string text, int seed, bool holdout = false)
         {
             float ratio = Mathf.Clamp01((float)S.Followers / Balance.FollowerGoal);
-            return new string(text.Select((c, k) => c < 0xAC00 || c > 0xD7A3 || (seed + k * 37) % 100 < ratio * 100 ? c : '■').ToArray());
+            var censored = new string(text.Select((c, k) => c < 0xAC00 || c > 0xD7A3 || (seed + k * 37) % 100 < ratio * 100 ? c : '■').ToArray());
+            return holdout ? censored : Kaomojify(censored, seed);
+        }
+
+        // 팔로워 40%부터 사람들이 한국어를 버리기 시작해 90%면 거의 카오모지만. 80%를 넘으면 모두 주인공의 얼굴을 따라 한다
+        float Conform => Mathf.Clamp01(((float)S.Followers / Balance.FollowerGoal - 0.4f) / 0.5f);
+        string lastFace; // 주인공이 마지막으로 지은 얼굴
+        string Mimic => lastFace ?? "(・_・)";
+        string CrowdFace(int seed) => Conform > 0.8f ? Mimic : FanFaces[Math.Abs(seed) % FanFaces.Length];
+        bool Replaced(int seed, int k) => (seed * 31 + k * 57) % 100 < Conform * 100;
+
+        string Kaomojify(string text, int seed)
+        {
+            if (Conform <= 0) return text;
+            var words = text.Split(' ');
+            return string.Join(" ", words.Select((w, k) => Replaced(seed, k) ? CrowdFace(seed + k) : w));
         }
 
         int FanKaomoji => S.Followers >= Balance.FollowerGoal * 0.9f ? 3 : S.Followers >= Balance.FollowerGoal * 0.6f ? 2 : S.Followers >= Balance.FollowerGoal * 0.3f ? 1 : 0;
@@ -1233,7 +1253,7 @@ namespace Kaomoji
                     {
                         GUILayout.BeginHorizontal();
                         Avatar(glyph, color, 28);
-                        GUILayout.Label(Censor(fx.Item1, post.Id.Sum(c => c) + 7), label, GUILayout.Height(28));
+                        GUILayout.Label(Censor(fx.Item1, post.Id.Sum(c => c) + 7, post.Holdout), label, GUILayout.Height(28));
                         GUILayout.EndHorizontal();
                     }
                 }
@@ -1296,6 +1316,7 @@ namespace Kaomoji
             if (S.Went != null && r is Result.Perfect or Result.Success) knownMood.Add(S.Went);
             Floats(before);
             uploadR = r; uploadT = Time.time; uploadFace = face; uploadGain = f;
+            lastFace = Face(selEye, selMouth);
             // 좋아요는 팔로워 수에 비례, 반응이 좋을수록 많이. 댓글도 그만큼 달린다
             float factor = r switch { Result.Perfect => 0.5f, Result.Success => 0.35f, Result.Creepy => 0.6f, Result.Meh => 0.1f, Result.Wrong => 0.03f, _ => 0.08f };
             likeTarget = Mathf.RoundToInt(Mathf.Max(30, S.Followers) * factor) + (decor != null ? 999 : 0);
@@ -1314,7 +1335,9 @@ namespace Kaomoji
             };
             int pick = S.Day * 7;
             for (int k = 0; k < n; k++)
-                postComments.Add(("♣♠§∞‡"[(k + S.Day) % 5].ToString(), new[] { Pal.BtnFace, Pal.Bubble, Pal.TitleA, Pal.Gray }[k % 4], FanKaomoji > 0 && k % 2 == 0 ? $"{lines[(pick + k) % lines.Length]} {FanFaces[(k + S.Day) % FanFaces.Length]}" : lines[(pick + k) % lines.Length]));
+                postComments.Add(("♣♠§∞‡"[(k + S.Day) % 5].ToString(), new[] { Pal.BtnFace, Pal.Bubble, Pal.TitleA, Pal.Gray }[k % 4],
+                    Conform > 0.8f ? string.Concat(Enumerable.Repeat(face, 2 + k % 3)) // 모두 내 얼굴을 따라 한다
+                    : FanKaomoji > 0 && k % 2 == 0 ? $"{lines[(pick + k) % lines.Length]} {FanFaces[(k + S.Day) % FanFaces.Length]}" : lines[(pick + k) % lines.Length]));
             diary.Add(new Sticker($"↑{face}", Pal.Bubble));
             AfterNightAction();
         }
@@ -1326,6 +1349,7 @@ namespace Kaomoji
             var post = S.Tonight[i];
             var (r, _, newly, newSyn) = S.DoReply(i, selEye, selMouth);
             Floats(before);
+            lastFace = Face(selEye, selMouth);
             replyFx[post.Id] = (newSyn != null ? $"{Fan(post, r)}  [{newSyn.Name}]" : Fan(post, r), Time.time);
             diary.Add(new Sticker($"{Face(selEye, selMouth)}{ResultMark(r)}", E[selEye].Color));
             foreach (var s in newly) diary.Add(new Sticker($"{s}{E[Sym[s]].Shape}", E[Sym[s]].Color));
@@ -1575,7 +1599,9 @@ namespace Kaomoji
         }
 
         // 팬의 한마디는 읽는 재미가 있는 글이라 남긴다
-        static string Fan(Post p, Result r) => (p.Author, r) switch
+        static string Fan(Post p, Result r) => p.Holdout
+            ? (r is Result.Perfect or Result.Success ? "…너는 아직 말이 통하는구나" : "너도 똑같네. 얼굴뿐이야.")
+            : (p.Author, r) switch
         {
             (Doubter, Result.Perfect) => "…내가 너무 예민했나",
             (Doubter, Result.Wrong) => "역시. 사람이 아니야.",
