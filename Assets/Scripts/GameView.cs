@@ -894,6 +894,15 @@ namespace Kaomoji
 
         string Hearts(int n) => $"<color={Pal.Heart}>{new string('♥', n)}</color><color={Pal.Gray}>{new string('♥', 3 - n)}</color>";
 
+        // 다음 하트까지 남은 성공 수: 2단계 뒤엔 성공 4번이 필요해 하트만으론 멈춘 것처럼 보인다
+        string AffPips(string id)
+        {
+            int lv = S.AffLevel(id);
+            if (lv >= 3) return "";
+            int w = S.AffWins.GetValueOrDefault(id);
+            return new string('●', w) + new string('○', Balance.AffNeed[lv] - w);
+        }
+
         void DrawPlaces()
         {
             float fat = S.OutingFat;
@@ -904,7 +913,7 @@ namespace Kaomoji
                 for (int j = i; j < i + 2 && j < list.Length; j++)
                 {
                     var p = list[j];
-                    Btn($"<size=40>{p.Icon}</size>\n<size=20>{Hearts(S.Aff.GetValueOrDefault(p.Id))}</size>",
+                    Btn($"<size=40>{p.Icon}</size>\n<size=20>{Hearts(S.Aff.GetValueOrDefault(p.Id))}</size>\n<size=14>{AffPips(p.Id)}</size>",
                         () => { S.PrepareOuting(p.Id); enc = null; selEye = selMouth = Emo.Neutral; Close(Win.Places); Open(Win.Encounter); street = InTutorial ? null : Street(); streetT = Time.time; },
                         true, iconStyle, GUILayout.Height(120));
                     Mark($"place_{j}");
@@ -944,7 +953,7 @@ namespace Kaomoji
             if (special && enc == null && ev.Decor != null)
                 GUILayout.Label($"+ {ev.Decor.L}(?){ev.Decor.R}", new GUIStyle(faceStyle) { fontSize = 22 });
             else if (S.PendingPlace != null)
-                GUILayout.Label(Hearts(S.Aff.GetValueOrDefault(S.PendingPlace)), new GUIStyle(dotStyle) { fontSize = 22 });
+                GUILayout.Label($"{Hearts(S.Aff.GetValueOrDefault(S.PendingPlace))} <size=14>{AffPips(S.PendingPlace)}</size>", new GUIStyle(dotStyle) { fontSize = 22, richText = true });
             GUILayout.EndHorizontal();
             GUILayout.Label(ev.Situation, label);
             GUILayout.Space(6);
