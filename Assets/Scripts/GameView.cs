@@ -51,7 +51,7 @@ namespace Kaomoji
         const int PopupId = 99, CoachId = 98, FxId = 300;
         static readonly Dictionary<Win, float> WinWidth = new()
         {
-            [Win.Places] = 480, [Win.Encounter] = 820, [Win.Home] = 820, [Win.Sns] = 960, [Win.Notebook] = 620, [Win.Traits] = 520, [Win.Diary] = 640, [Win.Ending] = 600,
+            [Win.Places] = 480, [Win.Encounter] = 820, [Win.Home] = 820, [Win.Sns] = 700, [Win.Notebook] = 420, [Win.Traits] = 520, [Win.Diary] = 640, [Win.Ending] = 600,
         };
         static readonly Emo[] PartOrder = { Emo.Neutral, Emo.Joy, Emo.Sad, Emo.Anger, Emo.Surprise, Emo.Shy };
 
@@ -96,7 +96,7 @@ namespace Kaomoji
         Font dot, body, round; // DotGothic16: 카오모지·숫자·아이콘 / Gowun Dodum: 한글 본문 / Dongle: 감정 이름·엔딩 제목
         GUIStyle label, small, big, dotStyle, faceStyle, postStyle, symStyle, roundStyle, winStyle, titleStyle, errTitleStyle, toastStyle,
                  btn, offBtn, closeBtn, card, paper, bubble, iconStyle, taskbar, panel, coachStyle, hiliteStyle, bezelStyle, stampStyle,
-                 cardBtn, badgeOn, badgeOff, clockOn, clockOff, curtainStyle, selCard, linkBtn;
+                 cardBtn, badgeOn, badgeOff, clockOn, clockOff, curtainStyle, selCard, linkBtn, tabOn, tabOff, cellFrame;
         readonly Dictionary<string, Texture2D> texCache = new();
         readonly Dictionary<string, GUIStyle> stickerStyles = new();
         readonly Dictionary<Emo, GUIStyle> chips = new(), partBtn = new(), partSel = new(), tintText = new(), tintCards = new();
@@ -126,17 +126,19 @@ namespace Kaomoji
                 new("close_result", "결과를 봤으면 × 로 창을 닫자.\n창을 닫아야 시간이 흐른다.", () => !Morning()),
                 new("icon_home", "오후다. 한 번 더 움직이자.\n[외출]이나 [집]에서 하나를 하고\n창을 닫으면 밤이 된다.", () => S.IsNight),
                 new("icon_sns", "밤이다.\n[SNS]를 열자.", () => open.Contains(Win.Sns) || S.NightDone || PastDay1()),
-                new("post_0", "내 게시물에 달린 팬 댓글이다.\n■는 못 읽는 글자.", () => S.Replies[0] != null || PastDay1(), true),
-                new("sym_0", "이 기호에 감정이 담겨 있다.", () => S.Replies[0] != null || PastDay1(), true),
+                new("icon_notebook", "[해독 수첩]도 같이 켜 두자.\nSNS 옆에 나란히 열린다.", () => open.Contains(Win.Notebook) || S.NightDone || PastDay1()),
+                new("tab_mention", "[@ 멘션] 탭: 팬들의 글에\n카오모지로 멘션을 단다.", () => snsTab == 1 || S.Replies[0] != null || PastDay1()),
+                new("post_0", "팬의 글이다.\n■는 못 읽는 글자.", () => S.Replies[0] != null || PastDay1(), true),
+                new("sym_0", "이 기호에 감정이 담겨 있다.\n옆의 수첩과 비교해 보자.", () => S.Replies[0] != null || PastDay1(), true),
                 new("clue_0", "단서를 보자.\n케이크 사진이면…?", () => S.Replies[0] != null || PastDay1(), true),
-                new("reply_0", "[답글 달기]를 누르고\n아래 입력창에서 얼굴을 만들어 [게시]!", () => S.Replies[0] != null || PastDay1()),
-                new("hold_1", "어려운 댓글은 [‖ 나중에].\n다음 밤에 서운해하며 돌아온다.", () => S.Replies[1] != null || PastDay1(), true),
-                new("upload", "내 게시물도 올리자. 사진을 누르고\n어울리는 얼굴로 [게시].", () => S.Uploaded || PastDay1()),
-                new("feed", "남은 댓글에도 답하자.", () => S.NightDone || PastDay1()),
+                new("reply_0", "[↩ 멘션 달기]를 누르고\n아래에서 얼굴을 만들어 [@ 보내기]!", () => S.Replies[0] != null || PastDay1()),
+                new("hold_1", "어려운 글은 [‖ 나중에].\n다음 밤에 서운해하며 돌아온다.", () => S.Replies[1] != null || PastDay1(), true),
+                new("feed", "남은 글에도 멘션을 달자.", () => S.Replies.All(r => r != null) || PastDay1()),
+                new("tab_post", "[▣ 내 게시물] 탭에서\n오늘 사진을 올리자.", () => snsTab == 0 || S.Uploaded || PastDay1()),
+                new("upload", "사진 속 장면을 읽고\n어울리는 얼굴로 [▣ 게시].", () => S.Uploaded || PastDay1()),
                 new("send", "결과를 봤으면 창을 닫자.", () => open.Contains(Win.Traits) || PastDay1()),
                 new("trait_0", "포인트로 특성을 올리자.", () => S.Points == 0 || PastDay1()),
                 new("sleep", "잠들기 전에 그림 일기를 쓴다.", () => open.Contains(Win.Diary) || PastDay1()),
-                new("icon_notebook", "감정 이름, 맞힌 기호, 시너지는\n[해독 수첩]에서 본다.", () => PastDay1() && open.Contains(Win.Notebook), true),
             };
         }
 
@@ -150,7 +152,8 @@ namespace Kaomoji
                 var before = Snap();
                 S.EndNight();
                 diary.Clear(); replyFx.Clear();
-                uploadR = null; target = -2;
+                uploadR = null; target = -2; snsTab = -1;
+                open.Clear(); enc = null; homeResult = null; // 날이 바뀌면 모든 창을 닫는다
                 followersAtDayStart = S.Followers;
                 Floats(before);
             }
@@ -227,6 +230,9 @@ namespace Kaomoji
                         r.x = rects[other].x; r.y = rects[other].y;
                         open.Remove(other); // 행동 전이라 시간은 그대로 (행동 뒤엔 아이콘이 잠겨 여기 오지 않는다)
                     }
+                // SNS와 해독 수첩은 나란히 놓이는 자리가 정해져 있다
+                if (w == Win.Sns) { r.x = 124; r.y = 12; }
+                if (w == Win.Notebook) { r.x = VW - 420 - 24; r.y = 12; }
                 open.Add(w);
                 rects[w] = r;
             }
@@ -257,7 +263,7 @@ namespace Kaomoji
             open.Clear(); popups.Clear(); toasts.Clear(); floaters.Clear(); diary.Clear();
             traitsEndNight = false;
             followersAtDayStart = 0;
-            enc = null; homeResult = null; replyFx.Clear(); uploadR = null; target = -2;
+            enc = null; homeResult = null; replyFx.Clear(); uploadR = null; target = -2; snsTab = -1; knownMood.Clear();
             selEye = selMouth = Emo.Neutral;
             selDecor = null;
         }
@@ -702,6 +708,9 @@ namespace Kaomoji
             GUILayout.BeginHorizontal();
             GUILayout.Label(ev.Portrait, new GUIStyle(faceStyle) { fontSize = 34, alignment = TextAnchor.MiddleLeft });
             Mark("npc");
+            GUILayout.FlexibleSpace();
+            if (S.PendingPlace != null && (ev.Kind == EvKind.Npc || ev.Who == PlaceById(S.PendingPlace).Npc))
+                GUILayout.Label(Hearts(S.Aff.GetValueOrDefault(S.PendingPlace)), new GUIStyle(dotStyle) { fontSize = 22 });
             GUILayout.EndHorizontal();
             GUILayout.Label(ev.Situation, label);
             GUILayout.Space(6);
@@ -837,31 +846,28 @@ namespace Kaomoji
             diary.Add(new Sticker("zZ", Pal.Bubble));
         }
 
-        // ---------- SNS: 왼쪽은 내 게시물, 오른쪽은 댓글, 아래는 입력창 (인스타그램식) ----------
+        // ---------- SNS: 두 탭. [내 게시물] 인스타그램식 사진 올리기 / [멘션] 트위터식 팬 글에 멘션 달기 ----------
 
         const string MyHandle = "@kao_kao";
-        int target = -2;          // 입력창이 향하는 곳: -1 내 게시물, 0 이상은 그 댓글, -2는 아직 안 고름
+        int snsTab = -1;          // 0 내 게시물, 1 멘션, -1은 아직 안 고름(열 때 할 일이 남은 쪽으로)
+        int target = -2;          // 멘션 탭에서 답할 글
         string uploadFace;
         int uploadGain;
         Vector2 commentScroll;
         Rect commentView;
-        Texture2D dotCircle;
+        readonly HashSet<string> knownMood = new(); // 올려서 반응이 좋았던 장소는 사진 분위기 칩이 보인다
 
-        // 아직 안 한 것 중 첫 번째로 입력창을 맞춘다: 댓글 먼저, 그다음 내 게시물
         void AutoTarget()
         {
-            bool ok = target == -1 ? !S.Uploaded : target >= 0 && target < S.Replies.Length && S.Replies[target] == null;
-            if (ok) return;
-            int i = Array.FindIndex(S.Replies, r => r == null);
-            target = i >= 0 ? i : !S.Uploaded ? -1 : -2;
+            if (snsTab < 0) snsTab = Array.Exists(S.Replies, r => r == null) ? 1 : 0;
+            if (target >= 0 && target < S.Replies.Length && S.Replies[target] == null) return;
+            target = Array.FindIndex(S.Replies, r => r == null);
         }
 
         void Avatar(string glyph, string color, float size = 34)
         {
             var r = GUILayoutUtility.GetRect(size, size, GUILayout.Width(size), GUILayout.Height(size));
-            var keep = GUI.color;
             GUI.DrawTexture(r, AvatarTex(color));
-            GUI.color = keep;
             GUI.Label(r, glyph, new GUIStyle(dotStyle) { alignment = TextAnchor.MiddleCenter, fontSize = (int)(size * 0.45f) });
         }
 
@@ -877,66 +883,64 @@ namespace Kaomoji
         void DrawSns()
         {
             AutoTarget();
+            int left = S.Replies.Count(r => r == null);
             GUILayout.BeginHorizontal();
-            MyPost();
-            GUILayout.Space(8);
-            Comments();
+            if (GUILayout.Button($"▣ 내 게시물  {(S.Uploaded ? "●" : "○")}", snsTab == 0 ? tabOn : tabOff, GUILayout.Height(34)) && !blocked) snsTab = 0;
+            Mark("tab_post");
+            if (GUILayout.Button($"@ 멘션  {S.Replies.Length - left}/{S.Replies.Length}", snsTab == 1 ? tabOn : tabOff, GUILayout.Height(34)) && !blocked) snsTab = 1;
+            Mark("tab_mention");
             GUILayout.EndHorizontal();
-            GUILayout.Space(6);
+            GUILayout.Space(4);
+            if (snsTab == 0) MyPost(); else Timeline();
+            GUILayout.Space(4);
             Composer();
         }
 
-        // 내 게시물: 프로필 줄, 사진(오늘 간 곳) 위에 붙인 카오모지, 좋아요
+        // [내 게시물]: 프로필, 오늘 간 곳 사진(장면 설명), 그 위에 붙는 카오모지, 좋아요
         void MyPost()
         {
-            GUILayout.BeginVertical(target == -1 ? selCard : card, GUILayout.Width(400), GUILayout.Height(400));
+            GUILayout.BeginVertical(card, GUILayout.Height(330));
             GUILayout.BeginHorizontal();
             Avatar("ψ", Pal.Hot);
             GUILayout.Label(MyHandle, new GUIStyle(dotStyle) { alignment = TextAnchor.MiddleLeft }, GUILayout.Height(34));
             GUILayout.FlexibleSpace();
-            GUILayout.Label(S.Uploaded ? "게시됨" : "새 게시물", small, GUILayout.Height(34));
+            GUILayout.Label($"♥ {(S.Uploaded ? uploadGain : 0):#,0}", new GUIStyle(dotStyle) { fontSize = 18, alignment = TextAnchor.MiddleRight }, GUILayout.Height(34));
             GUILayout.EndHorizontal();
 
-            // 사진: 누르면 입력창이 내 게시물을 향한다
-            var photo = GUILayoutUtility.GetRect(370, 250, GUILayout.ExpandWidth(true));
-            if (!S.Uploaded && GUI.Button(photo, GUIContent.none, GUIStyle.none) && !blocked) target = -1;
+            var place = S.Went == null ? null : PlaceById(S.Went);
+            var photo = GUILayoutUtility.GetRect(600, 230, GUILayout.ExpandWidth(true));
             GUI.Box(photo, GUIContent.none, bubble);
-            GUI.Label(photo, S.Went == null ? "△" : PlaceById(S.Went).Icon, new GUIStyle(dotStyle) { fontSize = 96, alignment = TextAnchor.MiddleCenter });
-            var face = S.Uploaded ? uploadFace : target == -1 ? Face(selEye, selMouth, selDecor) : null;
-            if (face != null)
-            {
-                var sr = new Rect(photo.xMax - 190, photo.yMax - 70, 176, 56);
-                var keep = GUI.matrix;
-                GUIUtility.RotateAroundPivot(-6, sr.center);
-                GUI.Label(sr, face, StickerStyle(Pal.Lightest));
-                GUI.matrix = keep;
-            }
+            GUI.Label(new Rect(photo.x, photo.y + 10, photo.width, 120), place?.Icon ?? "△", new GUIStyle(dotStyle) { fontSize = 90, alignment = TextAnchor.MiddleCenter });
+            // 아트 전까지는 사진 속 장면을 글로: 분위기를 추측할 단서
+            GUI.Label(new Rect(photo.x + 16, photo.y + 140, photo.width - 32, 40), place?.Photo ?? "어질러진 내 방. 별일 없는 하루.", new GUIStyle(label) { alignment = TextAnchor.MiddleCenter, fontSize = 17 });
+            if (place != null && knownMood.Contains(place.Id))
+                GUI.Label(new Rect(photo.x + 12, photo.y + 10, 110, 30), $"{E[place.Mood].Shape} {E[place.Mood].Name}", chips[place.Mood]);
+            var face = S.Uploaded ? uploadFace : Face(selEye, selMouth, selDecor);
+            var sr = new Rect(photo.xMax - 200, photo.yMax - 62, 186, 52);
+            var keep = GUI.matrix;
+            GUIUtility.RotateAroundPivot(-6, sr.center);
+            GUI.Label(sr, face, StickerStyle(Pal.Lightest));
+            GUI.matrix = keep;
             if (S.Uploaded && uploadR.HasValue)
             {
-                GUILayout.BeginArea(new Rect(photo.x, photo.y + 8, photo.width, 70));
+                GUILayout.BeginArea(new Rect(photo.x, photo.y + 150, 220, 70));
                 StampIn(ResultName(uploadR.Value), uploadT, 30);
                 GUILayout.EndArea();
             }
-            ExplainRect("오늘 간 곳의 사진. 아래 입력창에서\n얼굴을 고르고 [게시]하면 붙어서 올라간다.", photo, origin);
-
-            GUILayout.BeginHorizontal();
-            GUILayout.Label($"♥ {(S.Uploaded ? uploadGain : 0):#,0}", new GUIStyle(dotStyle) { fontSize = 18 });
-            GUILayout.Label($"댓글 {S.Tonight.Count}", small);
-            GUILayout.FlexibleSpace();
-            GUILayout.EndHorizontal();
+            ExplainRect(place == null ? "방 사진은 얼굴과 상관없이 조금 오른다." : "사진 속 장면의 분위기에 어울리는 감정의 얼굴을 붙이자.\n반응이 좋으면 다음부터 분위기 칩이 보인다.", photo, origin);
+            GUILayout.Label(S.Uploaded ? $"{MyHandle}  {uploadFace}" : "아래에서 얼굴을 고르면 사진에 붙는다", small);
             GUILayout.EndVertical();
             Mark("upload");
         }
 
-        void Comments()
+        // [멘션]: 팬들의 글 타임라인. 글마다 멘션 달기, 나중에
+        void Timeline()
         {
-            GUILayout.BeginVertical(card, GUILayout.Height(400));
-            GUILayout.Label($"댓글 {S.Tonight.Count}", big);
-            // 스크롤 안의 좌표를 창 좌표로: 튜토리얼 강조와 설명 위치가 맞도록
+            GUILayout.BeginVertical(card, GUILayout.Height(330));
             var saved = origin;
-            origin = saved + commentView.position - commentScroll;
-            commentScroll = GUILayout.BeginScrollView(commentScroll, GUILayout.Height(352));
-            for (int i = 0; i < S.Tonight.Count; i++) Comment(i);
+            origin = saved + commentView.position - commentScroll; // 스크롤 안의 좌표를 창 좌표로
+            commentScroll = GUILayout.BeginScrollView(commentScroll, GUILayout.Height(318));
+            for (int i = 0; i < S.Tonight.Count; i++) Tweet(i);
             GUILayout.EndScrollView();
             origin = saved;
             if (Event.current.type == EventType.Repaint) commentView = GUILayoutUtility.GetLastRect();
@@ -944,7 +948,7 @@ namespace Kaomoji
             Mark("feed");
         }
 
-        // 댓글 본문: 닉네임, 깨진 글(색 단서와 해독된 기호 포함), 단서. 댓글과 피드 구경이 같이 쓴다
+        // 글 본문: 닉네임, 깨진 글(색 단서와 해독된 기호 포함), 읽히는 글자, 단서. 타임라인과 피드 구경이 같이 쓴다
         void PostBody(Post post, bool forceColor, int i = -1)
         {
             var tokens = post.Text.Split(' ');
@@ -952,14 +956,13 @@ namespace Kaomoji
             bool color = post.Hint != Hint.None && (forceColor || S.ShowsColor(post));
             int tinted = !color ? 0 : post.Hint == Hint.Full ? tokens.Length : tokens.Length / 2;
             var hue = post.Answers[0].Eye;
-
-            GUILayout.Label($"{(post.Id.StartsWith("f") ? "→ " : "")}{Handle(post)}", new GUIStyle(dotStyle) { fontSize = 14 });
             // 해독한 기호가 서로 다른 감각이면 섞인 글: 시너지 얼굴이 정답일 수 있다
             var solvedEmos = tokens.Where(t => Sym.ContainsKey(t) && S.Solved(t)).Select(t => Sym[t]).Distinct().ToList();
             string mixed = solvedEmos.Count > 1 ? $"\n이 글엔 {string.Join("과(와) ", solvedEmos.Select(x => E[x].Name))}이(가) 섞여 있다.\n눈과 입을 다르게 한 시너지 얼굴이 맞을지도." : "";
             string colorTip = $"색 단서: {E[hue].Name} {E[hue].Shape} 느낌이 비친다." +
                 (post.Hint == Hint.Partial ? "\n글 일부에만 비친다. 다른 감각이 섞였을지도." : "") + "\n(색은 힌트일 뿐 정답은 아니다)";
 
+            GUILayout.Label($"{(post.Id.StartsWith("f") ? "→ " : "")}{Handle(post)}", new GUIStyle(dotStyle) { fontSize = 14 });
             GUILayout.BeginHorizontal();
             if (color) { GUILayout.Label($"{E[hue].Shape} {E[hue].Name}?", chips[hue], GUILayout.ExpandWidth(false)); Explain(colorTip); }
             bool firstSym = true;
@@ -974,7 +977,6 @@ namespace Kaomoji
                 }
                 if (S.Solved(t))
                 {
-                    // 해독한 기호는 기호 = 감각 이름으로
                     GUILayout.Label($"{t}={E[e].Name}", chips[e], GUILayout.ExpandWidth(false));
                     Explain($"{t} 는 '{E[e].Name}' 기호. 해독 수첩에서 풀었다.{mixed}");
                 }
@@ -985,14 +987,17 @@ namespace Kaomoji
                 }
                 if (firstSym && i >= 0) { Mark($"sym_{i}"); firstSym = false; }
             }
+            // 팔로워가 늘수록 팬들도 카오모지로 말하기 시작한다. 정답과는 상관없는 얼굴
             int kao = FanKaomoji;
-            if (kao > 0) GUILayout.Label(string.Join(" ", Enumerable.Repeat(Face(post.Answers[0].Eye, post.Answers[0].Mouth), kao)), postStyle, GUILayout.ExpandWidth(false));
+            if (kao > 0) GUILayout.Label(string.Join(" ", Enumerable.Range(0, kao).Select(n => FanFaces[(post.Id.Sum(ch => ch) + n * 3) % FanFaces.Length])), postStyle, GUILayout.ExpandWidth(false));
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
             if (S.Followers > 0) GUILayout.Label(Reveal(post), small);
             GUILayout.Label(string.Join("  ", post.Clues.Take(S.Traits[Trait.Decode] >= 1 ? 2 : 1)), small);
             if (i >= 0) Mark($"clue_{i}");
         }
+
+        static readonly string[] FanFaces = { "(・_・)ノ", "(・o・)", "(・∀・)", "(・ｪ・)", "(・.・)", "ヽ(・_・)ノ" };
 
         // 팔로워 비율만큼 실제 문장의 글자가 읽힌다 (글자마다 정해진 순서로 하나씩 풀린다)
         string Reveal(Post p)
@@ -1002,15 +1007,14 @@ namespace Kaomoji
             return new string(p.Plain.Select((c, k) => c == ' ' || (seed + k * 37) % 100 < ratio * 100 ? c : '■').ToArray());
         }
 
-        // 팔로워가 늘수록 팬들도 카오모지로 말하기 시작한다 (정복 엔딩으로 가는 길)
         int FanKaomoji => S.Followers >= Balance.FollowerGoal * 0.9f ? 3 : S.Followers >= Balance.FollowerGoal * 0.6f ? 2 : S.Followers >= Balance.FollowerGoal * 0.3f ? 1 : 0;
 
-        void Comment(int i)
+        void Tweet(int i)
         {
             var post = S.Tonight[i];
             var rep = S.Replies[i];
             var (glyph, color) = FanAvatar(post);
-            GUILayout.BeginVertical(target == i ? selCard : GUIStyle.none);
+            GUILayout.BeginVertical(target == i && rep == null ? selCard : GUIStyle.none);
             GUILayout.BeginHorizontal();
             Avatar(glyph, color);
             GUILayout.BeginVertical();
@@ -1018,7 +1022,7 @@ namespace Kaomoji
             if (rep == null)
             {
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button(target == i ? "답글 다는 중…" : "답글 달기", linkBtn, GUILayout.ExpandWidth(false)) && !blocked) target = i;
+                if (GUILayout.Button(target == i ? "↩ 멘션 쓰는 중…" : "↩ 멘션 달기", linkBtn, GUILayout.ExpandWidth(false)) && !blocked) target = i;
                 Mark($"reply_{i}");
                 if (S.CanHold) { if (GUILayout.Button("‖ 나중에", linkBtn, GUILayout.ExpandWidth(false)) && !blocked) pending = () => Hold(i); }
                 Mark($"hold_{i}");
@@ -1028,7 +1032,7 @@ namespace Kaomoji
             GUILayout.EndVertical();
             GUILayout.EndHorizontal();
 
-            // 답글 스레드: 왼쪽 선으로 이어진 한 단계 들여쓰기
+            // 내 멘션과 팬의 반응: 왼쪽 선으로 이어진 한 단계 스레드
             if (rep != null)
             {
                 GUILayout.BeginHorizontal();
@@ -1043,8 +1047,8 @@ namespace Kaomoji
                     var fx = replyFx.TryGetValue(post.Id, out var v) ? v : (null, -9f);
                     GUILayout.BeginHorizontal();
                     Avatar("ψ", Pal.Hot, 28);
-                    GUILayout.Label($"{MyHandle}  {rep.Face}", new GUIStyle(dotStyle) { fontSize = 16, alignment = TextAnchor.MiddleLeft }, GUILayout.Height(28));
-                    GUILayout.BeginVertical(GUILayout.Width(120));
+                    GUILayout.Label($"{MyHandle} {Handle(post).Split(' ')[0]}  {rep.Face}", new GUIStyle(dotStyle) { fontSize = 15, alignment = TextAnchor.MiddleLeft }, GUILayout.Height(28));
+                    GUILayout.BeginVertical(GUILayout.Width(110));
                     StampIn(ResultName(rep.R.Value), fx.Item2, 24);
                     GUILayout.EndVertical();
                     GUILayout.EndHorizontal();
@@ -1064,16 +1068,18 @@ namespace Kaomoji
             GUILayout.Space(6);
         }
 
-        // 입력창: 누구에게 다는지, 눈·입, 미리보기, 게시. 창 아래 폭 전체를 쓴다
+        // 입력창: 탭마다 따로. 내 게시물은 사진에 붙일 얼굴, 멘션은 누구에게 보낼 얼굴
         void Composer()
         {
+            bool post = snsTab == 0;
             GUILayout.BeginVertical(card);
             GUILayout.BeginHorizontal();
             Avatar("ψ", Pal.Hot, 28);
-            string to = target == -1 ? "내 게시물에 얼굴 붙이는 중" : target >= 0 ? $"{Handle(S.Tonight[target])} 님에게 답글 남기는 중" : "오늘 밤 SNS 끝! 결과를 보고 창을 닫자.";
+            string to = post ? (S.Uploaded ? "오늘 게시물은 올렸다" : "사진에 붙일 얼굴") : target >= 0 ? $"{Handle(S.Tonight[target])} 에게 멘션" : "멘션 끝!";
+            if (S.NightDone) to = "오늘 밤 SNS 끝! 결과를 보고 창을 닫자.";
             GUILayout.Label(to, new GUIStyle(label) { alignment = TextAnchor.MiddleLeft }, GUILayout.Height(28));
             GUILayout.FlexibleSpace();
-            if (target == -1 && S.Decors.Count > 0)
+            if (post && !S.Uploaded && S.Decors.Count > 0)
             {
                 if (GUILayout.Button("-", selDecor == null ? partSel[Emo.Neutral] : partBtn[Emo.Neutral], GUILayout.Width(40), GUILayout.Height(30)) && !blocked) selDecor = null;
                 foreach (var d in S.Decors)
@@ -1082,7 +1088,7 @@ namespace Kaomoji
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            GUILayout.BeginVertical(GUILayout.Width(380));
+            GUILayout.BeginVertical(GUILayout.Width(370));
             PartRow(S.Eyes, true, true);
             Mark("eyes");
             PartRow(S.Mouths, false, true);
@@ -1090,21 +1096,16 @@ namespace Kaomoji
             GUILayout.EndVertical();
             var syn = SynergyOf(selEye, selMouth);
             GUILayout.BeginVertical(tintCards[selEye], GUILayout.ExpandWidth(true), GUILayout.Height(104));
-            GUILayout.Label(Face(selEye, selMouth, target == -1 ? selDecor : null), new GUIStyle(faceStyle) { fontSize = 40 }, GUILayout.Height(64));
+            GUILayout.Label(Face(selEye, selMouth, post ? selDecor : null), new GUIStyle(faceStyle) { fontSize = 34 }, GUILayout.Height(64));
             if (syn != null) GUILayout.Label(S.FoundSynergies.Contains(syn.Name) ? syn.Name : "?", new GUIStyle(roundStyle) { alignment = TextAnchor.MiddleCenter, fontSize = 24 });
             GUILayout.EndVertical();
-            if (S.NightDone) Btn("<size=18>다 했다!\n× 닫기</size>", () => Close(Win.Sns), true, null, GUILayout.Width(140), GUILayout.Height(104));
-            else Btn("<size=20>게시 ▶</size>", Send, target != -2, null, GUILayout.Width(140), GUILayout.Height(104));
+            if (S.NightDone) Btn("<size=17>다 했다!\n× 닫기</size>", () => Close(Win.Sns), true, null, GUILayout.Width(120), GUILayout.Height(104));
+            else if (post) Btn("<size=18>▣ 게시</size>", Upload, !S.Uploaded, null, GUILayout.Width(120), GUILayout.Height(104));
+            else Btn("<size=18>@ 보내기</size>", () => Reply(target), target >= 0, null, GUILayout.Width(120), GUILayout.Height(104));
             Mark("send");
-            if (target >= 0) HoverFat(Balance.FatReply);
+            if (!post && target >= 0) HoverFat(Balance.FatReply);
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
-        }
-
-        void Send()
-        {
-            if (target == -1) Upload();
-            else if (target >= 0) Reply(target);
         }
 
         void Upload()
@@ -1114,6 +1115,7 @@ namespace Kaomoji
             var face = Face(selEye, selMouth, decor);
             var (r, f) = S.DoUpload(selEye, selMouth, decor);
             if (decor != null) { frenzyUntil = Time.time + 1.8f; S.Decors.Remove(decor); selDecor = null; } // shortcut: 장식은 한 번 쓰면 사라진다고 가정, 스펙 확인 필요
+            if (S.Went != null && r is Result.Perfect or Result.Success) knownMood.Add(S.Went);
             Floats(before);
             uploadR = r; uploadT = Time.time; uploadFace = face; uploadGain = f;
             diary.Add(new Sticker($"↑{face}", Pal.Bubble));
@@ -1122,6 +1124,7 @@ namespace Kaomoji
 
         void Reply(int i)
         {
+            if (i < 0) return;
             var before = Snap();
             var post = S.Tonight[i];
             var (r, _, newly, newSyn) = S.DoReply(i, selEye, selMouth);
@@ -1189,47 +1192,50 @@ namespace Kaomoji
 
         void DrawNotebook()
         {
+            // SNS 옆에 나란히 놓고 쓰도록 좁게. 순수 감정은 한 색, 시너지는 눈 색 + 입 색 반반
             int need = S.Traits[Trait.Decode] >= 2 ? 1 : 2;
             GUILayout.BeginHorizontal();
-            foreach (var e in Feelings)
-            {
-                GUILayout.BeginVertical(chips[e]);
-                GUILayout.Label(E[e].Name, new GUIStyle(roundStyle) { alignment = TextAnchor.MiddleCenter });
-                GUILayout.Label($"{E[e].Shape} {Face(e, e)}", new GUIStyle(dotStyle) { alignment = TextAnchor.MiddleCenter, fontSize = 13 });
-                GUILayout.EndVertical();
-            }
+            foreach (var e in Feelings) ColorCell(E[e].Color, E[e].Color, E[e].Name, $"{E[e].Shape}{Face(e, e)}", 72);
             GUILayout.EndHorizontal();
 
-            GUILayout.Label($"{S.SolvedCount}/{Sym.Count}", new GUIStyle(dotStyle) { fontSize = 20 });
+            GUILayout.Label($"기호 {S.SolvedCount}/{Sym.Count}", label);
             var seen = S.Seen.ToList();
+            if (seen.Count == 0) GUILayout.Label("밤에 SNS를 열면 기호가 모인다.", small);
             for (int i = 0; i < seen.Count; i += 5)
             {
                 GUILayout.BeginHorizontal();
                 foreach (var s in seen.Skip(i).Take(5))
                 {
-                    GUILayout.BeginVertical(paper, GUILayout.Width(104));
-                    GUILayout.Label(s, new GUIStyle(symStyle) { alignment = TextAnchor.MiddleCenter, fontSize = 30 });
-                    if (S.Solved(s)) GUILayout.Label(E[Sym[s]].Name, new GUIStyle(chips[Sym[s]]) { font = round, fontSize = 24 });
-                    else if (S.Stickers.TryGetValue(s, out var c)) GUILayout.Label($"{E[Sym[s]].Shape} {new string('●', c)}{new string('○', need - c)}", chips[Sym[s]]);
-                    else GUILayout.Label("?", new GUIStyle(dotStyle) { alignment = TextAnchor.MiddleCenter });
-                    GUILayout.EndVertical();
+                    var e = Sym[s];
+                    if (S.Solved(s)) ColorCell(E[e].Color, E[e].Color, s, E[e].Name, 72, true);
+                    else if (S.Stickers.TryGetValue(s, out var c)) ColorCell(Pal.Lightest, Pal.Lightest, s, $"{E[e].Shape}{new string('●', c)}{new string('○', need - c)}", 72, true);
+                    else ColorCell(Pal.Paper, Pal.Paper, s, "?", 72, true);
                 }
                 GUILayout.FlexibleSpace();
                 GUILayout.EndHorizontal();
             }
 
-            GUILayout.Space(6);
-            GUILayout.Label($"{S.FoundSynergies.Count}/{Synergies.Length}", new GUIStyle(dotStyle) { fontSize = 20 });
+            GUILayout.Label($"시너지 {S.FoundSynergies.Count}/{Synergies.Length}", label);
             GUILayout.BeginHorizontal();
             foreach (var syn in Synergies)
             {
                 bool found = S.FoundSynergies.Contains(syn.Name);
-                GUILayout.BeginVertical(found ? chips[syn.Eye] : paper, GUILayout.Width(104));
-                GUILayout.Label(found ? syn.Name : "?", new GUIStyle(roundStyle) { alignment = TextAnchor.MiddleCenter });
-                GUILayout.Label(found ? Face(syn.Eye, syn.Mouth) : "( ? ? )", new GUIStyle(dotStyle) { alignment = TextAnchor.MiddleCenter });
-                GUILayout.EndVertical();
+                if (found) ColorCell(E[syn.Eye].Color, E[syn.Mouth].Color, syn.Name, Face(syn.Eye, syn.Mouth), 72);
+                else ColorCell(Pal.Paper, Pal.Paper, "?", "( ? ? )", 72);
             }
             GUILayout.EndHorizontal();
+        }
+
+        // 칸 하나: 왼쪽 반은 a색, 오른쪽 반은 b색 (같으면 한 색). 위에 이름, 아래에 작은 글
+        void ColorCell(string a, string b, string top, string bottom, float w, bool bigTop = false)
+        {
+            var r = GUILayoutUtility.GetRect(w, 58, GUILayout.Width(w), GUILayout.Height(58));
+            GUI.DrawTexture(new Rect(r.x, r.y, r.width / 2, r.height), Tex(a));
+            GUI.DrawTexture(new Rect(r.x + r.width / 2, r.y, r.width / 2, r.height), Tex(b));
+            GUI.Box(r, GUIContent.none, cellFrame);
+            var topStyle = bigTop ? new GUIStyle(symStyle) { alignment = TextAnchor.MiddleCenter, fontSize = 22 } : new GUIStyle(roundStyle) { alignment = TextAnchor.MiddleCenter, fontSize = 24 };
+            GUI.Label(new Rect(r.x, r.y + 2, r.width, 30), top, topStyle);
+            GUI.Label(new Rect(r.x, r.y + 32, r.width, 24), bottom, new GUIStyle(dotStyle) { alignment = TextAnchor.MiddleCenter, fontSize = 12 });
         }
 
         // ---------- 특성 ----------
@@ -1506,6 +1512,11 @@ namespace Kaomoji
             linkBtn = Button(Tex(Pal.Lightest), Tex(Pal.BtnLight), Tex(Pal.BtnPress), body, 13); // 인스타그램식 '답글 달기' 글자 버튼
             linkBtn.normal.background = linkBtn.focused.background = linkBtn.onNormal.background = null;
             linkBtn.fontStyle = FontStyle.Bold; linkBtn.padding = new RectOffset(4, 4, 2, 2);
+            tabOn = Button(Bevel(Pal.TitleA, Pal.Lightest, Pal.Line), Bevel(Pal.TitleA, Pal.Lightest, Pal.Line), Bevel(Pal.TitleA, Pal.Line, Pal.Lightest), body, 16);
+            tabOn.fontStyle = FontStyle.Bold;
+            cellFrame = new GUIStyle { border = new RectOffset(2, 2, 2, 2) };
+            cellFrame.normal.background = Frame(Pal.Line, 8, 2);
+            tabOff = Button(Bevel(Pal.WinFace, Pal.Lightest, Pal.Line), Bevel(Pal.BtnLight, Pal.Lightest, Pal.Line), Bevel(Pal.BtnPress, Pal.Line, Pal.Lightest), body, 16);
 
             foreach (var e in PartOrder)
             {
@@ -1513,7 +1524,8 @@ namespace Kaomoji
                 var chip = Text(dot, 16);
                 chip.wordWrap = false; chip.alignment = TextAnchor.MiddleCenter;
                 chip.padding = new RectOffset(6, 6, 3, 3); chip.margin = new RectOffset(2, 2, 3, 3);
-                chip.normal.background = Bevel(col, Pal.Lightest, Pal.Line);
+                chip.normal.background = Bevel(col, col, Pal.Line);
+                chip.border = new RectOffset(1, 1, 1, 1); // 없으면 4x4 텍스처가 통째로 늘어나 모서리 색이 크게 번진다
                 chips[e] = Still(chip);
                 tintCards[e] = Boxed(Bevel(col, Pal.Lightest, Pal.Line));
                 // 색 단서: 글자 뒤에 감정 색을 깐다

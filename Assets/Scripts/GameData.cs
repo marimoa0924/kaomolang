@@ -72,6 +72,7 @@ namespace Kaomoji
     public class Place
     {
         public string Id, Name, Npc, Icon;
+        public string Photo; // 사진 속 장면. 아트 전까지 분위기를 추측할 단서
         public Emo Mood;
         public Encounter[] Story; // 호감 0, 1, 2단계
         public Encounter Passerby, Special;
@@ -164,7 +165,7 @@ namespace Kaomoji
 
         public static readonly Place[] Places =
         {
-            new() { Id = "park", Icon = "♣", Name = "공원", Npc = "펫시터", Mood = Emo.Joy,
+            new() { Id = "park", Photo = "꼬리 흔드는 강아지들, 햇살 아래 웃음소리", Icon = "♣", Name = "공원", Npc = "펫시터", Mood = Emo.Joy,
                 Story = new[] {
                     Ev("park0", EvKind.Npc, "펫시터", "강아지 셋에게 끌려다니며 깔깔 웃는다.", "◁◆▽ ▣◈!",
                         F(Emo.Joy), Emo.Joy, "같이 웃어 줬다고 더 활짝 웃는다.", Emo.Surprise, "네 얼굴을 보고 흠칫한다."),
@@ -178,7 +179,7 @@ namespace Kaomoji
                 Special = Ev("parkS", EvKind.Special, "길고양이", "덤불에서 길고양이가 너를 노려본다.", "냐…",
                     F(Emo.Surprise), Emo.Joy, "고양이가 네 손에 앞발을 올렸다!", Emo.Anger, "하악 하고 도망갔다.", Paw) },
 
-            new() { Id = "station", Icon = "〓", Name = "지하철역", Npc = "분실물센터 역무원", Mood = Emo.Sad,
+            new() { Id = "station", Photo = "비 젖은 승강장, 주인 없는 곰인형", Icon = "〓", Name = "지하철역", Npc = "분실물센터 역무원", Mood = Emo.Sad,
                 Story = new[] {
                     Ev("station0", EvKind.Npc, "분실물센터 역무원", "주인 없는 곰인형을 보며 울고 있다.", "◇▤◈ ▽◆…",
                         F(Emo.Sad), Emo.Joy, "위로받고 살짝 웃는다.", Emo.Surprise, "네 얼굴에 경악한다."),
@@ -192,7 +193,7 @@ namespace Kaomoji
                 Special = Ev("stationS", EvKind.Special, "역 피아노", "누군가 역 피아노로 슬픈 곡을 친다. 모두 멈춰 섰다.", "♩… ♪…",
                     F(Emo.Sad), Emo.Sad, "너도 모르게 눈물방울이 맺혔다.", Emo.Surprise, "연주자가 너를 보고 손을 멈췄다.", Tear) },
 
-            new() { Id = "store", Icon = "24", Name = "편의점", Npc = "야간 알바생", Mood = Emo.Anger,
+            new() { Id = "store", Photo = "새벽 3시, 진상 손님이 엎지른 컵라면", Icon = "24", Name = "편의점", Npc = "야간 알바생", Mood = Emo.Anger,
                 Story = new[] {
                     Ev("store0", EvKind.Npc, "야간 알바생", "진상 손님이 소리치고 나갔다. 알바생이 이를 간다.", "▨◁▣!! ◇▦▤!",
                         F(Emo.Anger), Emo.Joy, "같이 화내 줘서 피식 웃는다.", Emo.Anger, "\"손님까지 왜 그래요.\""),
@@ -206,7 +207,7 @@ namespace Kaomoji
                 Special = Ev("storeS", EvKind.Special, "복권 손님", "새벽 3시, 1등 당첨 복권이 나왔다! 다들 소리를 지른다.", "▩!!! ▩!!!",
                     F(Emo.Joy, Emo.Surprise), Emo.Joy, "다 같이 만세를 불렀다!", Emo.Surprise, "모두 너를 이상하게 쳐다본다.", Hooray) },
 
-            new() { Id = "cafe", Icon = "♨", Name = "카페", Npc = "신입 바리스타", Mood = Emo.Shy,
+            new() { Id = "cafe", Photo = "하트가 되다 만 라떼, 빨개진 볼", Icon = "♨", Name = "카페", Npc = "신입 바리스타", Mood = Emo.Shy,
                 Story = new[] {
                     Ev("cafe0", EvKind.Npc, "신입 바리스타", "라떼아트 하트가 감자가 됐다. 얼굴이 빨갛다.", "▨◇▣▣▦~",
                         F(Emo.Shy, Emo.Joy), Emo.Joy, "\"다음엔 진짜 하트!\" 하고 웃는다.", Emo.Surprise, "잔을 떨어뜨릴 뻔한다."),

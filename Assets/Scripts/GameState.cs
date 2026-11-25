@@ -122,7 +122,8 @@ namespace Kaomoji
             Decor decor = null;
             if (ok)
             {
-                if (ev.Kind == EvKind.Npc) Aff[PendingPlace] = Math.Min(3, Aff.GetValueOrDefault(PendingPlace) + 1);
+                // 고정 NPC가 나오는 특수 이벤트(카페의 바리스타)도 호감이 오른다
+                if (ev.Kind == EvKind.Npc || ev.Who == PlaceById(PendingPlace).Npc) Aff[PendingPlace] = Math.Min(3, Aff.GetValueOrDefault(PendingPlace) + 1);
                 if (ev.Decor != null) { decor = ev.Decor; Decors.Add(decor); DoneOnce.Add(ev.Id); }
                 else got = Gain(ev.WinMouth);
             }
