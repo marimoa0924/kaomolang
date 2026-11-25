@@ -38,7 +38,7 @@ namespace Kaomoji
         Post heldPost;
 
         public Encounter Pending; // 외출해서 지금 마주한 이벤트
-        string pendingPlace;
+        public string PendingPlace { get; private set; }
         bool nightPointGiven;
         readonly Random rng;
 
@@ -97,7 +97,7 @@ namespace Kaomoji
             Pending = extras.Count > 0 && rng.NextDouble() < Balance.ExtraEventChance
                 ? extras[rng.Next(extras.Count)]
                 : p.Story[Math.Min(Aff.GetValueOrDefault(placeId), 2)];
-            pendingPlace = placeId;
+            PendingPlace = placeId;
             return Pending;
         }
 
@@ -106,13 +106,13 @@ namespace Kaomoji
         {
             var ev = Pending;
             bool ok = ev.Fits.Contains(eye);
-            Visits[pendingPlace] = Visits.GetValueOrDefault(pendingPlace) + 1;
-            Went = pendingPlace;
+            Visits[PendingPlace] = Visits.GetValueOrDefault(PendingPlace) + 1;
+            Went = PendingPlace;
             Emo? got = null;
             Decor decor = null;
             if (ok)
             {
-                if (ev.Kind == EvKind.Npc) Aff[pendingPlace] = Math.Min(3, Aff.GetValueOrDefault(pendingPlace) + 1);
+                if (ev.Kind == EvKind.Npc) Aff[PendingPlace] = Math.Min(3, Aff.GetValueOrDefault(PendingPlace) + 1);
                 if (ev.Decor != null) { decor = ev.Decor; Decors.Add(decor); DoneOnce.Add(ev.Id); }
                 else got = Gain(ev.WinMouth);
             }

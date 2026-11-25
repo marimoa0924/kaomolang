@@ -40,8 +40,8 @@ namespace Kaomoji
 
     public class EmoInfo
     {
-        public string Name, Human, EyeL, EyeR, Mouth, Color;
-        public EmoInfo(string n, string h, string l, string r, string m, string c) { Name = n; Human = h; EyeL = l; EyeR = r; Mouth = m; Color = c; }
+        public string Name, Human, EyeL, EyeR, Mouth, Color, Shape; // Shape: 색이 비슷해도 구분되게 색 단서에 함께 붙는 모양
+        public EmoInfo(string n, string h, string l, string r, string m, string c, string shape) { Name = n; Human = h; EyeL = l; EyeR = r; Mouth = m; Color = c; Shape = shape; }
         public string Eyes => EyeL + " " + EyeR;
     }
 
@@ -62,7 +62,7 @@ namespace Kaomoji
 
     public class Encounter
     {
-        public string Id, Who, Situation, Say, WinText, FailText;
+        public string Id, Who, Portrait, Situation, Say, WinText, FailText; // Portrait: 이름 대신 보여줄 얼굴 아이콘
         public EvKind Kind;
         public Emo[] Fits;           // 상대 감정에 어울리는 눈
         public Emo WinMouth, FailMouth; // 상대가 짓는 반응 표정의 입
@@ -71,7 +71,7 @@ namespace Kaomoji
 
     public class Place
     {
-        public string Id, Name, Npc;
+        public string Id, Name, Npc, Icon;
         public Emo Mood;
         public Encounter[] Story; // 호감 0, 1, 2단계
         public Encounter Passerby, Special;
@@ -96,12 +96,12 @@ namespace Kaomoji
         // 주인공은 감정을 몸의 감각으로 부른다
         public static readonly Dictionary<Emo, EmoInfo> E = new()
         {
-            [Emo.Joy] = new("반짝", "기쁨", "^", "^", "▽", "#ffd23f"),
-            [Emo.Sad] = new("축축", "슬픔", "T", "T", "﹏", "#5aa9ff"),
-            [Emo.Anger] = new("따끔", "분노", "`", "´", "益", "#ff5a5a"),
-            [Emo.Surprise] = new("쿨", "놀람", "゚", "゚", "Д", "#b07cff"),
-            [Emo.Shy] = new("간질", "부끄러움", ">", "<", "ω", "#ff8fc8"),
-            [Emo.Neutral] = new("민짜", "중립", "・", "・", "_", "#c8c8d0"),
+            [Emo.Joy] = new("반짝", "기쁨", "^", "^", "▽", "#FFA9DE", "★"),
+            [Emo.Sad] = new("축축", "슬픔", "T", "T", "﹏", "#BAE2FC", "▼"),
+            [Emo.Anger] = new("따끔", "분노", "`", "´", "益", "#F29CFF", "◆"),
+            [Emo.Surprise] = new("쿨", "놀람", "ﾟ", "ﾟ", "Д", "#B6FBFF", "●"),
+            [Emo.Shy] = new("간질", "부끄러움", ">", "<", "ω", "#CCB8F7", "♥"),
+            [Emo.Neutral] = new("민짜", "중립", "・", "・", "_", "#D6DAE5", "○"),
         };
 
         public static string Face(Emo eye, Emo mouth, Decor d = null) => $"{d?.L}({E[eye].EyeL}{E[mouth].Mouth}{E[eye].EyeR}){d?.R}";
@@ -124,29 +124,37 @@ namespace Kaomoji
         public static Answer Syn(string name) => Synergies.First(s => s.Name == name);
         public static Answer SynergyOf(Emo eye, Emo mouth) => Synergies.FirstOrDefault(s => s.Eye == eye && s.Mouth == mouth);
 
-        // 감정 기호 사전: 감정마다 4개
+        // 감정 기호 사전: 감정마다 4개. 폰트에 없는 † ∮ 대신 † ∮
         public static readonly Dictionary<string, Emo> Sym = new()
         {
             ["☆"] = Emo.Joy, ["♪"] = Emo.Joy, ["✿"] = Emo.Joy, ["◎"] = Emo.Joy,
             ["☂"] = Emo.Sad, ["◇"] = Emo.Sad, ["∴"] = Emo.Sad, ["≈"] = Emo.Sad,
-            ["※"] = Emo.Anger, ["▲"] = Emo.Anger, ["♯"] = Emo.Anger, ["✕"] = Emo.Anger,
-            ["◉"] = Emo.Surprise, ["⁂"] = Emo.Surprise, ["↯"] = Emo.Surprise, ["⊙"] = Emo.Surprise,
+            ["※"] = Emo.Anger, ["▲"] = Emo.Anger, ["♯"] = Emo.Anger, ["†"] = Emo.Anger,
+            ["◉"] = Emo.Surprise, ["⁂"] = Emo.Surprise, ["∮"] = Emo.Surprise, ["⊙"] = Emo.Surprise,
             ["♡"] = Emo.Shy, ["∽"] = Emo.Shy, ["◐"] = Emo.Shy, ["❀"] = Emo.Shy,
         };
 
-        public static readonly Decor Paw = new("paw", "고양이 앞발", "ฅ", "ฅ");
+        public static readonly Decor Paw = new("paw", "고양이 수염", "=", "=");
         public static readonly Decor Tear = new("tear", "눈물방울", "。゜", "゜。");
         public static readonly Decor Hooray = new("hooray", "만세", "ヽ", "ノ");
-        public static readonly Decor Heart = new("heart", "하트", "♡", "♡");
+        public static readonly Decor Heart = new("heart", "하트", "♥", "♥");
+
+        // 이름 대신 보여주는 얼굴 아이콘. 상대의 감정은 드러내지 않는 민짜 얼굴
+        static readonly Dictionary<string, string> Portraits = new()
+        {
+            ["펫시터"] = "U・ｪ・U", ["분실물센터 역무원"] = "[・_・]", ["야간 알바생"] = "(-_-)", ["신입 바리스타"] = "(・_・)♨",
+            ["벤치의 할머니"] = "(・o・)", ["막차를 놓친 회사원"] = "(・_・)〓", ["꼬마 손님"] = "(・.・)", ["첫 데이트 커플"] = "(・_・)(・_・)",
+            ["길고양이"] = "=・ｪ・=", ["역 피아노"] = "♪♪♪", ["복권 손님"] = "(・∀・)",
+        };
 
         static Encounter Ev(string id, EvKind kind, string who, string sit, string say, Emo[] fits, Emo win, string winText, Emo fail, string failText, Decor decor = null) =>
-            new() { Id = id, Kind = kind, Who = who, Situation = sit, Say = say, Fits = fits, WinMouth = win, WinText = winText, FailMouth = fail, FailText = failText, Decor = decor };
+            new() { Id = id, Kind = kind, Who = who, Portrait = Portraits[who], Situation = sit, Say = say, Fits = fits, WinMouth = win, WinText = winText, FailMouth = fail, FailText = failText, Decor = decor };
 
         static Emo[] F(params Emo[] e) => e;
 
         public static readonly Place[] Places =
         {
-            new() { Id = "park", Name = "공원", Npc = "펫시터", Mood = Emo.Joy,
+            new() { Id = "park", Icon = "♣", Name = "공원", Npc = "펫시터", Mood = Emo.Joy,
                 Story = new[] {
                     Ev("park0", EvKind.Npc, "펫시터", "강아지 셋에게 끌려다니며 깔깔 웃는다.", "◁◆▽ ▣◈!",
                         F(Emo.Joy), Emo.Joy, "같이 웃어 줬다고 더 활짝 웃는다.", Emo.Surprise, "네 얼굴을 보고 흠칫한다."),
@@ -160,7 +168,7 @@ namespace Kaomoji
                 Special = Ev("parkS", EvKind.Special, "길고양이", "덤불에서 길고양이가 너를 노려본다.", "냐…",
                     F(Emo.Surprise), Emo.Joy, "고양이가 네 손에 앞발을 올렸다!", Emo.Anger, "하악 하고 도망갔다.", Paw) },
 
-            new() { Id = "station", Name = "지하철역", Npc = "분실물센터 역무원", Mood = Emo.Sad,
+            new() { Id = "station", Icon = "〓", Name = "지하철역", Npc = "분실물센터 역무원", Mood = Emo.Sad,
                 Story = new[] {
                     Ev("station0", EvKind.Npc, "분실물센터 역무원", "주인 없는 곰인형을 보며 울고 있다.", "◇▤◈ ▽◆…",
                         F(Emo.Sad), Emo.Joy, "위로받고 살짝 웃는다.", Emo.Surprise, "네 얼굴에 경악한다."),
@@ -174,7 +182,7 @@ namespace Kaomoji
                 Special = Ev("stationS", EvKind.Special, "역 피아노", "누군가 역 피아노로 슬픈 곡을 친다. 모두 멈춰 섰다.", "♩… ♪…",
                     F(Emo.Sad), Emo.Sad, "너도 모르게 눈물방울이 맺혔다.", Emo.Surprise, "연주자가 너를 보고 손을 멈췄다.", Tear) },
 
-            new() { Id = "store", Name = "편의점", Npc = "야간 알바생", Mood = Emo.Anger,
+            new() { Id = "store", Icon = "24", Name = "편의점", Npc = "야간 알바생", Mood = Emo.Anger,
                 Story = new[] {
                     Ev("store0", EvKind.Npc, "야간 알바생", "진상 손님이 소리치고 나갔다. 알바생이 이를 간다.", "▨◁▣!! ◇▦▤!",
                         F(Emo.Anger), Emo.Joy, "같이 화내 줘서 피식 웃는다.", Emo.Anger, "\"손님까지 왜 그래요.\""),
@@ -188,7 +196,7 @@ namespace Kaomoji
                 Special = Ev("storeS", EvKind.Special, "복권 손님", "새벽 3시, 1등 당첨 복권이 나왔다! 다들 소리를 지른다.", "▩!!! ▩!!!",
                     F(Emo.Joy, Emo.Surprise), Emo.Joy, "다 같이 만세를 불렀다!", Emo.Surprise, "모두 너를 이상하게 쳐다본다.", Hooray) },
 
-            new() { Id = "cafe", Name = "카페", Npc = "신입 바리스타", Mood = Emo.Shy,
+            new() { Id = "cafe", Icon = "♨", Name = "카페", Npc = "신입 바리스타", Mood = Emo.Shy,
                 Story = new[] {
                     Ev("cafe0", EvKind.Npc, "신입 바리스타", "라떼아트 하트가 감자가 됐다. 얼굴이 빨갛다.", "▨◇▣▣▦~",
                         F(Emo.Shy, Emo.Joy), Emo.Joy, "\"다음엔 진짜 하트!\" 하고 웃는다.", Emo.Surprise, "잔을 떨어뜨릴 뻔한다."),
@@ -231,15 +239,15 @@ namespace Kaomoji
             new[] { Creepy(P(Starlover, "◉ ■■ ✿ ■■ !!!", "[사진] 네 사진으로 도배된 방", "[반응] 소름×40", Hint.Partial, Syn("집착"))),
                     P(null, "∽ ■■■ ◉ ■", "[사진] 반쯤 가린 셀카", "[반응] 두근×11", Hint.Partial, Syn("두근"), Pure(Emo.Shy)),
                     P(null, "■■ ♯ ■ ▲ ■■!!", "[사진] 구겨진 영수증", "[시각] 밤 10시", Hint.Full, Pure(Emo.Anger)) },
-            new[] { Or(P(Doubter, "↯ ■■■ ⊙ ?", "[사진] 정전된 거리", "[반응] 헉×20", Hint.Full, Pure(Emo.Surprise)),
-                       P(Doubter, "※ ↯ ■■ ✕ !!", "[반응] 신고×5", "[시각] 자정", Hint.None, Pure(Emo.Anger))),
+            new[] { Or(P(Doubter, "∮ ■■■ ⊙ ?", "[사진] 정전된 거리", "[반응] 헉×20", Hint.Full, Pure(Emo.Surprise)),
+                       P(Doubter, "※ ∮ ■■ † !!", "[반응] 신고×5", "[시각] 자정", Hint.None, Pure(Emo.Anger))),
                     Or(P(Gloomcat, "■ ◐ ■■ ✿ ..", "[사진] 무릎 위 고양이", "[반응] 간질×6", Hint.Partial, Pure(Emo.Shy), Pure(Emo.Joy)),
                        P(Gloomcat, "≈ ■■■ ◇ ■", "[사진] 이삿짐 상자", "[시각] 새벽 1시", Hint.Full, Pure(Emo.Sad))),
                     P(null, "♯ ■ ∽ ■■ ~", "[사진] 약속에 늦은 친구 메시지", "[반응] 흥×7", Hint.None, Syn("삐짐")) },
             new[] { Creepy(P(Starlover, "⊙ ■ ◎ ■■ ⊙ ■■■", "[사진] 네 얼굴을 오린 가면", "[시각] 새벽 4시 44분", Hint.None, Syn("집착"))),
                     P(null, "❀ ■■■ ◐ ■", "[사진] 커플 머그컵", "[반응] 하트×4", Hint.Full, Pure(Emo.Shy)),
-                    Or(P(Doubter, "■ ✕ ■■ ⁂ ?!?", "[사진] 하늘의 이상한 빛", "[반응] 외계인×99", Hint.Partial, Pure(Emo.Surprise)),
-                       P(Doubter, "✕ ※ ■■ ✕ !!!", "[반응] 박제×50", "[시각] 새벽 5시", Hint.None, Pure(Emo.Anger))) },
+                    Or(P(Doubter, "■ † ■■ ⁂ ?!?", "[사진] 하늘의 이상한 빛", "[반응] 외계인×99", Hint.Partial, Pure(Emo.Surprise)),
+                       P(Doubter, "† ※ ■■ † !!!", "[반응] 박제×50", "[시각] 새벽 5시", Hint.None, Pure(Emo.Anger))) },
         };
 
         // 보류한 글은 다음 밤 서운함이 섞인 후속 글로 돌아온다

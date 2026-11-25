@@ -14,7 +14,7 @@ namespace Kaomoji.Tests
             Assert.AreEqual(Result.Meh, GameState.Judge(Emo.Neutral, Emo.Joy, Emo.Joy));
             Assert.AreEqual(Result.Wrong, GameState.Judge(Emo.Sad, Emo.Joy, Emo.Joy));
             Assert.AreEqual("(`益´)", GameData.Face(Emo.Anger, Emo.Anger));
-            Assert.AreEqual("ฅ(^▽^)ฅ", GameData.Face(Emo.Joy, Emo.Joy, GameData.Paw));
+            Assert.AreEqual("=(^▽^)=", GameData.Face(Emo.Joy, Emo.Joy, GameData.Paw));
             Assert.AreEqual(20, GameData.Sym.Count);
         }
 

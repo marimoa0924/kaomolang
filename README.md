@@ -7,4 +7,6 @@
 - 수치 조정: `Assets/Scripts/GameData.cs`의 `Balance`.
 - 테스트: Window → General → Test Runner → EditMode.
 
-구조: `GameData`(콘텐츠, 수치) · `GameState`(규칙, Unity 비의존) · `GameView`(노트북 바탕화면 UI, IMGUI 임시).
+구조: `GameData`(콘텐츠, 수치) · `GameState`(규칙, Unity 비의존) · `GameView`(태블릿 화면, IMGUI 임시).
+
+폰트: `Assets/Resources/Fonts` (DotGothic16, Gowun Dodum, Dongle, 빠진 기호용 Noto Sans JP). 모두 SIL OFL, 라이선스는 `Assets/Fonts/Licenses`.
