@@ -844,6 +844,7 @@ namespace Kaomoji
         string uploadFace;
         int uploadGain;
         Vector2 commentScroll;
+        Rect commentView;
         Texture2D dotCircle;
 
         // 아직 안 한 것 중 첫 번째로 입력창을 맞춘다: 댓글 먼저, 그다음 내 게시물
@@ -931,9 +932,14 @@ namespace Kaomoji
         {
             GUILayout.BeginVertical(card, GUILayout.Height(400));
             GUILayout.Label($"댓글 {S.Tonight.Count}", big);
+            // 스크롤 안의 좌표를 창 좌표로: 튜토리얼 강조와 설명 위치가 맞도록
+            var saved = origin;
+            origin = saved + commentView.position - commentScroll;
             commentScroll = GUILayout.BeginScrollView(commentScroll, GUILayout.Height(352));
             for (int i = 0; i < S.Tonight.Count; i++) Comment(i);
             GUILayout.EndScrollView();
+            origin = saved;
+            if (Event.current.type == EventType.Repaint) commentView = GUILayoutUtility.GetLastRect();
             GUILayout.EndVertical();
             Mark("feed");
         }
@@ -948,15 +954,35 @@ namespace Kaomoji
             var hue = post.Answers[0].Eye;
 
             GUILayout.Label($"{(post.Id.StartsWith("f") ? "→ " : "")}{Handle(post)}", new GUIStyle(dotStyle) { fontSize = 14 });
+            // 해독한 기호가 서로 다른 감각이면 섞인 글: 시너지 얼굴이 정답일 수 있다
+            var solvedEmos = tokens.Where(t => Sym.ContainsKey(t) && S.Solved(t)).Select(t => Sym[t]).Distinct().ToList();
+            string mixed = solvedEmos.Count > 1 ? $"\n이 글엔 {string.Join("과(와) ", solvedEmos.Select(x => E[x].Name))}이(가) 섞여 있다.\n눈과 입을 다르게 한 시너지 얼굴이 맞을지도." : "";
+            string colorTip = $"색 단서: {E[hue].Name} {E[hue].Shape} 느낌이 비친다." +
+                (post.Hint == Hint.Partial ? "\n글 일부에만 비친다. 다른 감각이 섞였을지도." : "") + "\n(색은 힌트일 뿐 정답은 아니다)";
+
             GUILayout.BeginHorizontal();
-            if (color) GUILayout.Label(E[hue].Shape, chips[hue], GUILayout.ExpandWidth(false));
+            if (color) { GUILayout.Label($"{E[hue].Shape} {E[hue].Name}?", chips[hue], GUILayout.ExpandWidth(false)); Explain(colorTip); }
             bool firstSym = true;
             for (int k = 0; k < tokens.Length; k++)
             {
                 var t = tokens[k];
-                if (!Sym.TryGetValue(t, out var e)) { GUILayout.Label(t, k < tinted ? tintText[hue] : postStyle, GUILayout.ExpandWidth(false)); continue; }
-                if (S.Solved(t)) GUILayout.Label($"{t}{E[e].Shape}", chips[e], GUILayout.ExpandWidth(false));
-                else GUILayout.Label(t, k < tinted ? tintText[hue] : symStyle, GUILayout.ExpandWidth(false));
+                if (!Sym.TryGetValue(t, out var e))
+                {
+                    GUILayout.Label(t, k < tinted ? tintText[hue] : postStyle, GUILayout.ExpandWidth(false));
+                    if (k < tinted) Explain(colorTip);
+                    continue;
+                }
+                if (S.Solved(t))
+                {
+                    // 해독한 기호는 기호 = 감각 이름으로
+                    GUILayout.Label($"{t}={E[e].Name}", chips[e], GUILayout.ExpandWidth(false));
+                    Explain($"{t} 는 '{E[e].Name}' 기호. 해독 수첩에서 풀었다.{mixed}");
+                }
+                else
+                {
+                    GUILayout.Label(t, k < tinted ? tintText[hue] : symStyle, GUILayout.ExpandWidth(false));
+                    Explain(S.Stickers.TryGetValue(t, out var c) ? $"{t} : {E[e].Name} 스티커 {c}장. 더 모으면 해독된다." : $"{t} : 아직 모르는 기호. 맞히면 스티커가 붙는다.");
+                }
                 if (firstSym && i >= 0) { Mark($"sym_{i}"); firstSym = false; }
             }
             int kao = FanKaomoji;

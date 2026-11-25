@@ -120,7 +120,7 @@ namespace Kaomoji
             Starlover => "▒빛■버 ★",
             Gloomcat => "■울■■양■ =ｪ=",
             Doubter => "■심■■■ ?",
-            _ => "■▒■ " + "♣♠♦●▼"[p.Id.Sum(c => c) % 5],
+            _ => "■▒■ " + "♣♠§∞‡"[p.Id.Sum(c => c) % 5], // 감정 모양(★▼◆●♥)과 겹치지 않는 기호
         };
 
         public static readonly Answer[] Synergies =
