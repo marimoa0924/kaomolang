@@ -105,11 +105,30 @@ namespace Kaomoji.Tests
         public void SymbolSolvesAfterTwoStickers()
         {
             var s = new GameState(1);
-            s.DoReply(0, Emo.Joy, Emo.Neutral); // 1일째 ☆
+            s.DoReply(0, Emo.Joy, Emo.Neutral); // 1일째 별빛러버 글의 ☆
+            Assert.AreEqual(1, s.Stickers["☆"]);
             Assert.IsFalse(s.Solved("☆"));
-            s.EndNight();
-            s.DoReply(2, Emo.Joy, Emo.Neutral); // 2일째 ☆
+            s.Stickers["☆"]++;
             Assert.IsTrue(s.Solved("☆"));
+        }
+
+        [Test]
+        public void MentionPoolIsLargeAndShuffledPerRun()
+        {
+            Assert.GreaterOrEqual(GameData.Pool.Count, 100); // 정식판 30일 × 하루 2~3자리도 채울 만큼
+            Assert.AreEqual(GameData.Pool.Count, GameData.Pool.Select(p => p.Id).Distinct().Count());
+            foreach (var p in GameData.Pool)
+            {
+                // 깨진 글에는 정답 감정의 기호가 들어 있어야 해독이 가능하다
+                var emos = p.Answers.SelectMany(a => new[] { a.Eye, a.Mouth }).Distinct();
+                foreach (var e in emos) Assert.IsTrue(p.Text.Split(' ').Any(t => GameData.Sym.TryGetValue(t, out var x) && x == e), p.Id);
+            }
+            var a = new GameState(1); var b = new GameState(2);
+            Assert.AreEqual(Balance.PostsPerNight, a.Tonight.Count);
+            var seenA = new System.Collections.Generic.List<string>(); var seenB = new System.Collections.Generic.List<string>();
+            for (int d = 0; d < Balance.Days; d++) { seenA.AddRange(a.Tonight.Select(p => p.Id)); seenB.AddRange(b.Tonight.Select(p => p.Id)); a.EndNight(); b.EndNight(); }
+            Assert.AreEqual(seenA.Count, seenA.Distinct().Count()); // 한 판 안에서 같은 글이 두 번 나오지 않는다
+            CollectionAssert.AreNotEqual(seenA, seenB);             // 판마다 다르다
         }
 
         [Test]

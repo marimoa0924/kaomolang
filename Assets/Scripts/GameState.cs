@@ -36,6 +36,8 @@ namespace Kaomoji
         public List<Post> Tonight = new();
         public ReplyState[] Replies = Array.Empty<ReplyState>();
         Post heldPost;
+        readonly List<Post> poolOrder;
+        int poolNext;
 
         public Encounter Pending; // 외출해서 지금 마주한 이벤트
         public string PendingPlace { get; private set; }
@@ -45,6 +47,7 @@ namespace Kaomoji
         public GameState(int? seed = null)
         {
             rng = seed.HasValue ? new Random(seed.Value) : new Random();
+            poolOrder = Pool.OrderBy(_ => rng.Next()).ToList(); // 다회차: 판마다 다른 글
             StartDay();
         }
 
@@ -178,7 +181,10 @@ namespace Kaomoji
 
         void StartDay()
         {
-            Tonight = Posts[Day - 1].Select(p => p.Bad != null && p.Author != null && RegularHappy.TryGetValue(p.Author, out var ok) && !ok ? p.Bad : p).ToList();
+            // 단골의 이야기 글(그날 몫) + 나머지는 회차마다 섞인 풀에서 차례로
+            var regulars = Day <= Posts.Length ? Posts[Day - 1].Where(p => p.Author != null) : Enumerable.Empty<Post>();
+            Tonight = regulars.Select(p => p.Bad != null && RegularHappy.TryGetValue(p.Author, out var ok) && !ok ? p.Bad : p).ToList();
+            while (Tonight.Count < Balance.PostsPerNight && poolNext < poolOrder.Count) Tonight.Add(poolOrder[poolNext++]);
             if (heldPost != null) Tonight.Add(Followup(heldPost, Day));
             heldPost = null;
             Replies = new ReplyState[Tonight.Count];
