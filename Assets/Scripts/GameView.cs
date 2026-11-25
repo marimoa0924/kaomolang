@@ -100,7 +100,7 @@ namespace Kaomoji
         Font dot, body, round; // DotGothic16: 카오모지·숫자·아이콘 / Gowun Dodum: 한글 본문 / Dongle: 감정 이름·엔딩 제목
         GUIStyle label, small, big, dotStyle, faceStyle, postStyle, symStyle, roundStyle, winStyle, titleStyle, errTitleStyle, toastStyle,
                  btn, offBtn, closeBtn, card, paper, bubble, iconStyle, taskbar, panel, coachStyle, hiliteStyle, bezelStyle, stampStyle,
-                 cardBtn, badgeOn, badgeOff, clockOn, clockOff, curtainStyle, selCard, linkBtn, tabOn, tabOff, cellFrame;
+                 cardBtn, badgeOn, badgeOff, clockOn, clockOff, curtainStyle, selCard, linkBtn, tabOn, tabOff, cellFrame, specialOn, specialOff, passerbyTag;
         readonly Dictionary<string, Texture2D> texCache = new();
         readonly Dictionary<string, GUIStyle> stickerStyles = new();
         readonly Dictionary<Emo, GUIStyle> chips = new(), partBtn = new(), partSel = new(), tintText = new(), tintCards = new();
@@ -700,7 +700,7 @@ namespace Kaomoji
         // 창 제목도 글자 대신 아이콘
         string Title(Win w) => w switch
         {
-            Win.Places => "→", Win.Encounter => S.PendingPlace != null ? PlaceById(S.PendingPlace).Icon : "→",
+            Win.Places => "→", Win.Encounter => S.PendingPlace != null ? ((enc?.Ev ?? S.Pending)?.Kind == EvKind.Special ? "★ " : "") + PlaceById(S.PendingPlace).Icon : "→",
             Win.Home => "△", Win.Sns => "((•))", Win.Notebook => "¶", Win.Traits => "↑", Win.Diary => "zZ", _ => "★",
         };
 
@@ -790,19 +790,40 @@ namespace Kaomoji
             GUILayout.BeginHorizontal();
 
             GUILayout.BeginVertical(GUILayout.Width(400));
-            // 행인과 특수 이벤트는 바탕색만 다르다
-            GUILayout.BeginVertical(ev.Kind == EvKind.Special ? tintCards[Emo.Joy] : ev.Kind == EvKind.Passerby ? card : paper);
+            bool special = ev.Kind == EvKind.Special;
+            // 특수 이벤트: 깜빡이는 띠, 반짝이는 테두리, 얼굴 주위를 도는 별, 보상(특수 이모지) 미리보기
+            if (special)
+                GUILayout.Label("★ SPECIAL EVENT ★", (int)(Time.time * 3) % 2 == 0 ? specialOn : specialOff, GUILayout.Height(34));
+            else if (ev.Kind == EvKind.Passerby)
+                GUILayout.Label("ONE TIME", passerbyTag, GUILayout.Width(110), GUILayout.Height(24));
+            GUILayout.BeginVertical(special ? tintCards[Emo.Joy] : ev.Kind == EvKind.Passerby ? card : paper);
             GUILayout.BeginHorizontal();
             GUILayout.Label(ev.Portrait, new GUIStyle(faceStyle) { fontSize = 34, alignment = TextAnchor.MiddleLeft });
             Mark("npc");
+            if (special && Event.current.type == EventType.Repaint)
+            {
+                var pr = GUILayoutUtility.GetLastRect();
+                for (int i = 0; i < 6; i++)
+                {
+                    float ang = i * Mathf.PI / 3 + Time.time * 2;
+                    GUI.Label(new Rect(pr.center.x + Mathf.Cos(ang) * 70 - 10, pr.center.y + Mathf.Sin(ang) * 26 - 10, 20, 20), "★", new GUIStyle(dotStyle) { fontSize = 14 + i % 2 * 6 });
+                }
+            }
             GUILayout.FlexibleSpace();
-            if (S.PendingPlace != null && (ev.Kind == EvKind.Npc || ev.Who == PlaceById(S.PendingPlace).Npc))
+            if (special && enc == null && ev.Decor != null)
+                GUILayout.Label($"+ {ev.Decor.L}(?){ev.Decor.R}", new GUIStyle(faceStyle) { fontSize = 22 });
+            else if (S.PendingPlace != null)
                 GUILayout.Label(Hearts(S.Aff.GetValueOrDefault(S.PendingPlace)), new GUIStyle(dotStyle) { fontSize = 22 });
             GUILayout.EndHorizontal();
             GUILayout.Label(ev.Situation, label);
             GUILayout.Space(6);
             GUILayout.Label(enc == null ? $"“{ev.Say}”" : enc.Ok ? ev.WinText : ev.FailText, bubble);
             GUILayout.EndVertical();
+            if (special && Event.current.type == EventType.Repaint && (int)(Time.time * 4) % 2 == 0)
+            {
+                var cr = GUILayoutUtility.GetLastRect();
+                GUI.Box(new Rect(cr.x - 4, cr.y - 4, cr.width + 8, cr.height + 8), GUIContent.none, hiliteStyle);
+            }
             Mark("situation");
             GUILayout.EndVertical();
 
@@ -1720,6 +1741,13 @@ namespace Kaomoji
             linkBtn.fontStyle = FontStyle.Bold; linkBtn.padding = new RectOffset(4, 4, 2, 2);
             tabOn = Button(Bevel(Pal.TitleA, Pal.Lightest, Pal.Line), Bevel(Pal.TitleA, Pal.Lightest, Pal.Line), Bevel(Pal.TitleA, Pal.Line, Pal.Lightest), body, 16);
             tabOn.fontStyle = FontStyle.Bold;
+            specialOn = Boxed(Bevel(Pal.Hot, Pal.Lightest, Pal.Line), 4);
+            specialOn.font = dot; specialOn.fontSize = 22; specialOn.alignment = TextAnchor.MiddleCenter;
+            specialOff = new GUIStyle(specialOn);
+            specialOff.normal.background = Bevel(Pal.TitleA, Pal.Lightest, Pal.Line);
+            Still(specialOff);
+            passerbyTag = Boxed(Bevel(Pal.Gray, Pal.Lightest, Pal.Line), 2);
+            passerbyTag.font = dot; passerbyTag.fontSize = 14; passerbyTag.alignment = TextAnchor.MiddleCenter;
             cellFrame = new GUIStyle { border = new RectOffset(2, 2, 2, 2) };
             cellFrame.normal.background = Frame(Pal.Line, 8, 2);
             tabOff = Button(Bevel(Pal.WinFace, Pal.Lightest, Pal.Line), Bevel(Pal.BtnLight, Pal.Lightest, Pal.Line), Bevel(Pal.BtnPress, Pal.Line, Pal.Lightest), body, 16);
