@@ -983,6 +983,15 @@ namespace Kaomoji
             _ => (Handle(p).Substring(Handle(p).Length - 1), Pal.BtnFace),
         };
 
+        static readonly string[] SnsHelp =
+        {
+            "▣ 내 게시물: 사진 속 장면의 분위기에 어울리는 감정의 얼굴을 붙여 게시한다. 반응이 좋았던 장소는 다음부터 사진에 분위기 모양이 보인다.",
+            "@ 멘션: 팬 글의 감정을 추측해 얼굴로 답한다. 어려우면 ‖ 나중에 (다음 밤에 서운해하며 돌아온다).",
+            "기호: 맞히면 스티커가 붙고, 다 모이면 해독돼 그 감각의 색으로 보인다. 기호에 마우스를 올리면 수첩의 같은 칸이 두근거린다.",
+            "★? 같은 색 칩: 글에 그 모양 감각의 색이 비친다는 뜻. 어떤 감각인지는 수첩에서 같은 모양을 찾자. 글 일부에만 비치면 다른 감각이 섞였을 수 있다.",
+            "색이 다른 기호가 섞인 글은 눈과 입을 다르게 한 시너지 얼굴이 맞을 수 있다.",
+        };
+
         void DrawSns()
         {
             AutoTarget();
@@ -992,6 +1001,9 @@ namespace Kaomoji
             Mark("tab_post");
             if (GUILayout.Button($"@ 멘션  {S.Replies.Length - left}/{S.Replies.Length}", snsTab == 1 ? tabOn : tabOff, GUILayout.Height(34)) && !blocked) { snsTab = 1; commentScroll = Vector2.zero; } // 멘션은 맨 위 글부터
             Mark("tab_mention");
+            if (GUILayout.Button("?", closeBtn, GUILayout.Width(34), GUILayout.Height(34)) && !blocked)
+                pending = () => popups.Enqueue(new Popup { Title = "?", Draw = () => { foreach (var line in SnsHelp) GUILayout.Label(line, label); } });
+            Mark("sns_help");
             GUILayout.EndHorizontal();
             GUILayout.Space(4);
             if (snsTab == 0) MyPost(); else Timeline();
@@ -1030,7 +1042,6 @@ namespace Kaomoji
                 StampIn(ResultName(uploadR.Value), uploadT, 56);
                 GUILayout.EndArea();
             }
-            ExplainRect(place == null ? "방 사진은 얼굴과 상관없이 조금 오른다." : "사진 속 장면의 분위기에 어울리는 감정의 얼굴을 붙이자.\n반응이 좋으면 다음부터 분위기 칩이 보인다.", photo, origin);
             // 좋아요는 사진 왼쪽 아래에서 차오른다
             GUILayout.Space(6);
             int likes = S.Uploaded ? Mathf.RoundToInt(likeTarget * Mathf.Clamp01((Time.time - uploadT) / 2.5f)) : 0;
@@ -1075,12 +1086,9 @@ namespace Kaomoji
             bool color = post.Hint != Hint.None && (forceColor || S.ShowsColor(post));
             int tinted = !color ? 0 : post.Hint == Hint.Full ? tokens.Length : tokens.Length / 2;
             var hue = post.Answers[0].Eye;
-            string colorTip = $"이 글에 {E[hue].Shape} 모양의 색이 비친다.\n어떤 감각인지는 옆 수첩에서 같은 모양을 찾자." +
-                (post.Hint == Hint.Partial ? "\n글 일부에만 비친다. 다른 감각이 섞였을지도." : "");
-
             GUILayout.Label($"{(post.Id.StartsWith("f") ? "→ " : "")}{Handle(post)}", new GUIStyle(dotStyle) { fontSize = 14 });
             GUILayout.BeginHorizontal();
-            if (color) { GUILayout.Label($"{E[hue].Shape}?", chips[hue], GUILayout.ExpandWidth(false)); Explain(colorTip); HoverEmo(hue); }
+            if (color) { GUILayout.Label($"{E[hue].Shape}?", chips[hue], GUILayout.ExpandWidth(false)); HoverEmo(hue); }
             // 팔로워가 늘수록 팬들도 카오모지로 말한다: 글 사이사이나 끝에, 정답과 상관없는 얼굴로
             int kao = FanKaomoji, seed = post.Id.Sum(ch => ch);
             var kaoAt = Enumerable.Range(0, kao).Select(n => (seed + n * 5) % (tokens.Length + 1)).ToList();
@@ -1093,7 +1101,7 @@ namespace Kaomoji
                 if (!Sym.TryGetValue(t, out var e))
                 {
                     GUILayout.Label(t, k < tinted ? tintText[hue] : postStyle, GUILayout.ExpandWidth(false));
-                    if (k < tinted) { Explain(colorTip); HoverEmo(hue); }
+                    if (k < tinted) HoverEmo(hue);
                     continue;
                 }
                 if (S.Solved(t))
