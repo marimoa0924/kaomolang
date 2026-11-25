@@ -73,7 +73,7 @@ namespace Kaomoji
         Decor selDecor;
         EncResult enc;
         bool decorTutorial;
-        (string stamp, string face)? homeResult; // 집 활동 결과: 창 안에 도장, 닫기 버튼만 남는다
+        (string stamp, string face, string sub)? homeResult; // 집 활동 결과: 창 안에 도장, 닫기 버튼만 남는다
         readonly Dictionary<string, (string fan, float t)> replyFx = new(); // 댓글 카드 안에 뜨는 판정과 팬의 한마디
         float uploadT = -9;
         Result? uploadR;
@@ -923,13 +923,14 @@ namespace Kaomoji
                 GUILayout.Space(20);
                 StampIn(hr.stamp, homeT, 80);
                 if (hr.face != null) GUILayout.Label(hr.face, new GUIStyle(faceStyle) { fontSize = 40 });
+                if (hr.sub != null) GUILayout.Label(hr.sub, new GUIStyle(label) { alignment = TextAnchor.MiddleCenter, fontSize = 17 });
                 GUILayout.Space(10);
                 Btn("<size=20>×</size>", () => Close(Win.Home), true, null, GUILayout.Height(44));
                 Mark("close_result");
             }
             else
             {
-                HomeCard("○", "거울 연습", Balance.FatHome, Mirror, "가진 파츠로 얼굴 연습.\n시너지를 찾으면 수첩에 남는다.");
+                HomeCard("○", "거울 연습", Balance.FatHome, Mirror, "눈과 입을 다른 감정으로 섞어 본다.\n말이 되는 조합(시너지)이면 성공, 수첩에 남는다.");
                 Mark("home_mirror");
                 HomeCard("((•))", "피드 구경", Balance.FatHome, Peek, "오늘 밤 팬 글 하나를\n미리 보고 색 단서를 받는다.");
                 HomeCard("zZ", "낮잠", Balance.FatNap, Nap, $"크게 쉰다. 의심도 {Balance.NapSus}.");
@@ -948,7 +949,7 @@ namespace Kaomoji
             Explain(help);
         }
 
-        void HomeDone(string stamp, string face) { homeResult = (stamp, face); homeT = Time.time; }
+        void HomeDone(string stamp, string face, string sub = null) { homeResult = (stamp, face, sub); homeT = Time.time; }
 
         void Mirror()
         {
@@ -956,7 +957,12 @@ namespace Kaomoji
             var face = Face(selEye, selMouth);
             var (syn, isNew) = S.DoMirror(selEye, selMouth);
             Floats(before);
-            HomeDone(isNew ? "시너지!" : "연습", face);
+            if (syn == null)
+                HomeDone("실패", face, selEye == selMouth
+                    ? "눈과 입이 같은 감정이다.\n눈과 입을 다르게 섞어 보자."
+                    : $"{E[selEye].Name} 눈과 {E[selMouth].Name} 입은 어울리지 않는다.");
+            else
+                HomeDone("성공", face, isNew ? $"새 시너지 '{syn.Name}'!\n수첩에 기록했다." : $"'{syn.Name}' 얼굴. 이미 아는 시너지다.");
             if (isNew) diary.Add(new Sticker($"+{face}", E[selEye].Color));
         }
 
