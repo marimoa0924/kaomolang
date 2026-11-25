@@ -422,7 +422,7 @@ namespace Kaomoji
             GUI.BringWindowToFront(97);
         }
 
-        const float CurtainIn = 0.4f, CurtainHold = 2.2f;
+        const float CurtainIn = 0.4f, CurtainEndText = 1.2f, CurtainHold = CurtainEndText + LoadTime + 0.4f;
         bool CurtainDone => Time.time - curtainT > CurtainIn * 2 + CurtainHold;
 
         // 날이 지나갈 때: 막이 내려오고 N일차 종료 → N+1일차, 다시 올라간다
@@ -434,18 +434,23 @@ namespace Kaomoji
             GUI.Window(96, new Rect(-Bezel, -Bezel, VW + Bezel * 2, (VH + Bezel * 2) * p), _ =>
             {
                 if (p < 1) return;
-                bool first = t < CurtainIn + CurtainHold / 2;
+                float W = VW + Bezel * 2, H = VH + Bezel * 2;
                 var big = new GUIStyle(roundStyle) { fontSize = 72, alignment = TextAnchor.MiddleCenter };
-                GUI.Label(new Rect(0, VH / 2 - 60, VW + Bezel * 2, 90), first ? $"{curtainDay}일차 종료" : S.Ending != Ending.None ? "…" : $"{S.Day}일차", big);
-                if (!first && S.Ending == Ending.None)
-                    GUI.Label(new Rect(0, VH / 2 + 30, VW + Bezel * 2, 40), $"♥ {S.Followers:#,0} / {Balance.FollowerGoal:#,0}",
-                        new GUIStyle(dotStyle) { fontSize = 32, alignment = TextAnchor.MiddleCenter });
+                if (t < CurtainIn + CurtainEndText) { GUI.Label(new Rect(0, H / 2 - 60, W, 90), $"{curtainDay}일차 종료", big); return; }
+                if (S.Ending != Ending.None) { GUI.Label(new Rect(0, H / 2 - 60, W, 90), "…", big); return; }
+                // 재부팅 때와 같은 로딩 막대가 천천히 차오르고 다음 날
+                var dot = new GUIStyle(dotStyle) { fontSize = 40, alignment = TextAnchor.MiddleCenter };
+                int bars = Mathf.RoundToInt(Mathf.Clamp01((t - CurtainIn - CurtainEndText) / LoadTime) * 12);
+                GUI.Label(new Rect(0, H / 2 - 40, W, 50), "LOADING", dot);
+                GUI.Label(new Rect(0, H / 2 + 10, W, 40), new string('▒', bars) + new string('·', 12 - bars), dot);
+                GUI.Label(new Rect(0, H / 2 + 60, W, 50), $"{S.Day}일차", new GUIStyle(roundStyle) { fontSize = 44, alignment = TextAnchor.MiddleCenter });
+                GUI.Label(new Rect(0, H / 2 + 115, W, 36), $"♥ {S.Followers:#,0} / {Balance.FollowerGoal:#,0}", new GUIStyle(dotStyle) { fontSize = 24, alignment = TextAnchor.MiddleCenter });
             }, GUIContent.none, curtainStyle);
             GUI.BringWindowToFront(96);
         }
 
         // 멘탈붕괴 셧다운: 폭주(흔들림·잡음·에러 폭탄) → 브라운관처럼 꺼짐 → 정지 화면 → 재부팅 → 다음 날
-        const float ShutRiot = 1.0f, ShutOff = 1.7f, ShutHalt = 2.8f, ShutBoot = 4.2f, ShutEnd = 5.0f;
+        const float ShutRiot = 1.0f, ShutOff = 1.7f, ShutHalt = 2.8f, ShutBoot = 4.2f, ShutEnd = 7.0f, LoadTime = 2.4f;
         bool ShutDone => Time.time - shutT > ShutEnd;
 
         void DrawShutdown()
@@ -488,7 +493,7 @@ namespace Kaomoji
                     return;
                 }
                 // 재부팅: 막대가 차오르고 막이 걷힌다
-                float b = Mathf.Clamp01((t - ShutBoot) / 0.5f);
+                float b = Mathf.Clamp01((t - ShutBoot) / LoadTime);
                 int bars = Mathf.RoundToInt(b * 12);
                 GUI.Label(new Rect(0, H / 2 - 40, W, 50), "REBOOT", big);
                 GUI.Label(new Rect(0, H / 2 + 10, W, 40), new string('▒', bars) + new string('·', 12 - bars), big);
@@ -798,8 +803,6 @@ namespace Kaomoji
             // 특수 이벤트: 깜빡이는 띠, 반짝이는 테두리, 얼굴 주위를 도는 별, 보상(특수 이모지) 미리보기
             if (special)
                 GUILayout.Label("★ SPECIAL EVENT ★", (int)(Time.time * 3) % 2 == 0 ? specialOn : specialOff, GUILayout.Height(34));
-            else if (ev.Kind == EvKind.Passerby)
-                GUILayout.Label("ONE TIME", passerbyTag, GUILayout.Width(110), GUILayout.Height(24));
             GUILayout.BeginVertical(special ? tintCards[Emo.Joy] : ev.Kind == EvKind.Passerby ? card : paper);
             GUILayout.BeginHorizontal();
             GUILayout.Label(ev.Portrait, new GUIStyle(faceStyle) { fontSize = 34, alignment = TextAnchor.MiddleLeft });
