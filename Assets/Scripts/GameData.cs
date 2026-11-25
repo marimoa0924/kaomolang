@@ -113,6 +113,15 @@ namespace Kaomoji
 
         public static Answer Pure(Emo e) => new(e, e, E[e].Name);
 
+        // 팬 닉네임도 깨진 문자와 기호로 보인다. 단골은 늘 같은 모양이라 알아볼 수는 있다
+        public static string Handle(Post p) => p.Author switch
+        {
+            Starlover => "▒빛■버 ★",
+            Gloomcat => "■울■■양■ =ｪ=",
+            Doubter => "■심■■■ ?",
+            _ => "■▒■ " + "♣♠♦●▼"[p.Id.Sum(c => c) % 5],
+        };
+
         public static readonly Answer[] Synergies =
         {
             new(Emo.Sad, Emo.Joy, "괜찮은 척"),
