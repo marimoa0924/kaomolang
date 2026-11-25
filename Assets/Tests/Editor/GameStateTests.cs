@@ -39,8 +39,12 @@ namespace Kaomoji.Tests
             Assert.AreEqual(6, s.Eyes.Count);
             Assert.AreEqual(1, s.Mouths.Count);
             s.DoNap();
+            Assert.AreEqual(Slot.Morning, s.Slot); // 결과 창을 닫기 전엔 시간이 안 흐른다
+            Assert.IsFalse(s.CanAct);
+            s.EndAction();
             Assert.AreEqual(Slot.Afternoon, s.Slot);
             s.DoPeek();
+            s.EndAction();
             Assert.IsTrue(s.IsNight);
             Assert.IsTrue(s.ShowsColor(s.Tonight[0]));
         }
@@ -53,6 +57,7 @@ namespace Kaomoji.Tests
             var (ok, mouth, _) = s.DoEncounter(ev.Fits[0]);
             Assert.IsTrue(ok);
             Assert.AreEqual(ev.WinMouth, mouth);
+            s.EndAction();
 
             ev = s.PrepareOuting("park");
             var wrong = new[] { Emo.Joy, Emo.Sad, Emo.Anger, Emo.Surprise, Emo.Shy }.First(e => !ev.Fits.Contains(e));

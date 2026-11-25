@@ -123,7 +123,8 @@ namespace Kaomoji
                 new("situation", "상대의 지금 기분을 보자.", () => !Morning(), true),
                 new("eyes", "낮에는 눈만 본다.\n어울리는 눈을 골라 보자.", () => selEye != Emo.Neutral || !Morning()),
                 new("react", "반응하자!\n성공이든 실패든 상대의 입을 얻는다.", () => enc != null || !Morning()),
-                new("icon_home", "오후다. 한 번 더 움직인다.\n[외출]이나 [집] 중 하나.", () => S.IsNight),
+                new("close_result", "결과를 봤으면 × 로 창을 닫자.\n창을 닫아야 시간이 흐른다.", () => !Morning()),
+                new("icon_home", "오후다. 한 번 더 움직이자.\n[외출]이나 [집]에서 하나를 하고\n창을 닫으면 밤이 된다.", () => S.IsNight),
                 new("icon_sns", "밤이다.\n[SNS]를 열자.", () => open.Contains(Win.Sns) || S.NightDone || PastDay1()),
                 new("post_0", "팬 글이다.\n■는 못 읽는 글자.", () => S.Replies[0] != null || PastDay1(), true),
                 new("sym_0", "이 기호에 감정이 담겨 있다.", () => S.Replies[0] != null || PastDay1(), true),
@@ -209,14 +210,24 @@ namespace Kaomoji
 
         // ---------- 창 관리 ----------
 
+        // 외출(장소·만남)과 집은 한 창을 같이 쓴다: 다른 쪽을 열면 같은 자리에서 내용만 바뀐다
+        static readonly Win[] DayGroup = { Win.Places, Win.Encounter, Win.Home };
+
         void Open(Win w)
         {
             if (!open.Contains(w))
             {
-                open.Add(w);
                 float wid = WinWidth[w];
-                float x = wid > 820 ? 130 : 140 + (790 - wid) / 2 + open.Count * 14;
-                rects[w] = new Rect(x, 20 + open.Count * 14, wid, 0);
+                float x = wid > 820 ? 130 : 140 + (790 - wid) / 2 + (open.Count + 1) * 14;
+                var r = new Rect(x, 20 + (open.Count + 1) * 14, wid, 0);
+                if (DayGroup.Contains(w))
+                    foreach (var other in DayGroup.Where(o => o != w && open.Contains(o)).ToList())
+                    {
+                        r.x = rects[other].x; r.y = rects[other].y;
+                        open.Remove(other); // 행동 전이라 시간은 그대로 (행동 뒤엔 아이콘이 잠겨 여기 오지 않는다)
+                    }
+                open.Add(w);
+                rects[w] = r;
             }
             focusReq = (int)w + 1;
         }
@@ -224,6 +235,7 @@ namespace Kaomoji
         void Close(Win w)
         {
             open.Remove(w);
+            if (w is Win.Encounter or Win.Home) S.EndAction();
             if (w == Win.Encounter) enc = null;
             if (w == Win.Traits && traitsEndNight)
             {
@@ -359,8 +371,11 @@ namespace Kaomoji
 
         void ExplainRect(string text, Rect r, Vector2 o)
         {
-            if (Event.current.type == EventType.Repaint && r.Contains(Event.current.mousePosition))
-                tipNext = (text, new Rect(r.x + o.x, r.y + o.y, r.width, r.height));
+            if (Event.current.type != EventType.Repaint || !r.Contains(Event.current.mousePosition)) return;
+            var mouse = Event.current.mousePosition + o;
+            // 마우스가 지금 그리는 창이 아닌 다른 창 위에 있으면 (가려진 요소) 설명을 띄우지 않는다
+            if (open.Any(w => w != curWin && rects.TryGetValue(w, out var wr) && wr.Contains(mouse))) return;
+            tipNext = (text, new Rect(r.x + o.x, r.y + o.y, r.width, r.height));
         }
 
         void DrawTip()
@@ -459,12 +474,14 @@ namespace Kaomoji
 
         // ---------- 바탕화면 ----------
 
+        const string WaitClose = "결과 창을 닫으면\n다음 시간으로 넘어간다.";
+
         void DrawIcons()
         {
             var icons = new (string key, string glyph, string name, Action act, bool on, string why)[]
             {
-                ("icon_outing", "→", "외출", () => Open(Win.Places), !S.IsNight, "밤엔 밖에 나가지 않는다.\n지금은 SNS 시간!"),
-                ("icon_home", "△", "집", () => Open(Win.Home), !S.IsNight, "밤엔 집 활동 대신\nSNS를 하자."),
+                ("icon_outing", "→", "외출", () => Open(Win.Places), S.CanAct, S.IsNight ? "밤엔 밖에 나가지 않는다.\n지금은 SNS 시간!" : WaitClose),
+                ("icon_home", "△", "집", () => Open(Win.Home), S.CanAct, S.IsNight ? "밤엔 집 활동 대신\nSNS를 하자." : WaitClose),
                 ("icon_sns", "((•))", "SNS", () => { S.MarkSeen(); Open(Win.Sns); }, S.IsNight, "SNS는 밤에 열린다.\n오전·오후에 먼저 움직이자."),
                 ("icon_notebook", "¶", "해독 수첩", () => Open(Win.Notebook), true, null),
                 ("icon_traits", "↑", "특성", () => Open(Win.Traits), true, null),
@@ -480,11 +497,11 @@ namespace Kaomoji
                     else { pinTip = why; pinRect = r; pinT = Time.time; }
                 }
                 MarkRect(key, r, Vector2.zero);
-                if (!on) { ExplainRect(why, r, Vector2.zero); GUI.Label(new Rect(r.xMax - 30, r.y + 2, 28, 22), S.IsNight ? "zZ" : "●", badgeOff); }
+                if (!on) { ExplainRect(why, r, Vector2.zero); GUI.Label(new Rect(r.xMax - 30, r.y + 2, 28, 24), S.IsNight ? "zZ" : "…", badgeOff); }
                 // 지금 할 수 있는 행동에 깜빡이는 배지
                 bool now = on && (key == "icon_sns" ? !S.NightDone : key is "icon_outing" or "icon_home");
-                if (now && Time.time * 2 % 2 < 1.3f) GUI.Label(new Rect(r.xMax - 26, r.y + 2, 24, 22), "!", badgeOn);
-                if (key == "icon_traits" && S.Points > 0) GUI.Label(new Rect(r.xMax - 26, r.y + 2, 24, 22), $"{S.Points}", badgeOn);
+                if (now && Time.time * 2 % 2 < 1.3f) GUI.Label(new Rect(r.xMax - 28, r.y + 2, 26, 26), "!", badgeOn);
+                if (key == "icon_traits" && S.Points > 0) GUI.Label(new Rect(r.xMax - 28, r.y + 2, 26, 26), $"{S.Points}", badgeOn);
             }
         }
 
@@ -609,8 +626,11 @@ namespace Kaomoji
             return r;
         }
 
+        Win? curWin; // 지금 그리는 창. 바탕화면이면 null
+
         void DrawWin(Win w)
         {
+            curWin = w;
             blocked = popups.Count > 0;
             origin = rects[w].position;
             float width = rects[w].width;
@@ -627,6 +647,7 @@ namespace Kaomoji
                 case Win.Ending: DrawEnding(); break;
             }
             GUI.DragWindow(new Rect(0, 0, width, 32));
+            curWin = null;
         }
 
         void DrawPopup()
@@ -697,11 +718,16 @@ namespace Kaomoji
             }
             else
             {
-                // 결과는 창 안에: 도장, 얻은 것, 닫기 버튼
-                StampIn(enc.Ok ? "성공" : "실패", enc.T);
-                if (enc.Decor != null) GUILayout.Label(Face(Emo.Joy, Emo.Joy, enc.Decor), new GUIStyle(faceStyle) { fontSize = 32 });
-                Builder(true, false);
+                // 결과는 창 안에: 큰 도장, 얻은 것, 닫기 버튼만
+                GUILayout.Space(20);
+                StampIn(enc.Ok ? "성공" : "실패", enc.T, 96);
+                GUILayout.Space(16);
+                string gain = enc.Mouth.HasValue ? $"+ {E[enc.Mouth.Value].Mouth}" : enc.Decor != null ? $"+ {Face(Emo.Joy, Emo.Joy, enc.Decor)}" : " ";
+                GUILayout.Label(gain, new GUIStyle(faceStyle) { fontSize = 40 }, GUILayout.Height(60));
+                Mark("gain");
+                GUILayout.FlexibleSpace();
                 Btn("<size=20>×</size>", () => Close(Win.Encounter), true, null, GUILayout.Height(44));
+                Mark("close_result");
             }
             GUILayout.EndVertical();
 
@@ -719,7 +745,7 @@ namespace Kaomoji
             diary.Add(new Sticker($"{ev.Portrait} {(ok ? "♥" : "×")}", ok ? Pal.Paper : Pal.Gray));
             if (mouth.HasValue)
             {
-                Fly(E[mouth.Value].Mouth, $"mouth_{mouth.Value}");
+                Fly(E[mouth.Value].Mouth, "gain");
                 diary.Add(new Sticker($"(・{E[mouth.Value].Mouth}・)", E[mouth.Value].Color));
             }
             if (decor != null) diary.Add(new Sticker(Face(Emo.Joy, Emo.Joy, decor), Pal.Special));
@@ -748,9 +774,12 @@ namespace Kaomoji
             GUILayout.BeginVertical(GUILayout.Width(380));
             if (homeResult is { } hr)
             {
-                StampIn(hr.stamp, homeT);
+                GUILayout.Space(20);
+                StampIn(hr.stamp, homeT, 80);
                 if (hr.face != null) GUILayout.Label(hr.face, new GUIStyle(faceStyle) { fontSize = 40 });
+                GUILayout.Space(10);
                 Btn("<size=20>×</size>", () => Close(Win.Home), true, null, GUILayout.Height(44));
+                Mark("close_result");
             }
             else
             {
@@ -761,8 +790,7 @@ namespace Kaomoji
             }
             GUILayout.EndVertical();
 
-            GUILayout.Space(12);
-            Builder(true, homeResult == null);
+            if (homeResult == null) { GUILayout.Space(12); Builder(true, true); }
             GUILayout.EndHorizontal();
         }
 
@@ -1294,7 +1322,7 @@ namespace Kaomoji
             cardBtn = Button(Bevel(Pal.Lightest, Pal.Lightest, Pal.Line), Bevel(Pal.BtnLight, Pal.Lightest, Pal.Line), Bevel(Pal.BtnPress, Pal.Line, Pal.Lightest), body, 16);
             cardBtn.alignment = TextAnchor.MiddleLeft; cardBtn.padding = new RectOffset(16, 8, 6, 6);
             badgeOn = Boxed(Bevel(Pal.Hot, Pal.Lightest, Pal.Line), 0);
-            badgeOn.font = dot; badgeOn.alignment = TextAnchor.MiddleCenter; badgeOn.wordWrap = false;
+            badgeOn.font = body; badgeOn.fontSize = 18; badgeOn.fontStyle = FontStyle.Bold; badgeOn.alignment = TextAnchor.MiddleCenter; badgeOn.wordWrap = false;
             badgeOff = Boxed(Bevel(Pal.Gray, Pal.Lightest, Pal.Line), 0);
             badgeOff.font = dot; badgeOff.fontSize = 12; badgeOff.alignment = TextAnchor.MiddleCenter; badgeOff.wordWrap = false;
             clockOn = Boxed(Bevel(Pal.Hot, Pal.Lightest, Pal.Line), 0);

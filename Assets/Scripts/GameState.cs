@@ -86,7 +86,17 @@ namespace Kaomoji
             AddSus(Traits[Trait.Mimic] >= 2 ? Balance.BreakdownSus / 2 : Balance.BreakdownSus);
         }
 
-        void Advance() => Slot++;
+        // 행동을 마쳐도 결과 창을 닫을 때(EndAction)까지 시간은 흐르지 않는다
+        public bool ActionPending { get; private set; }
+        void Advance() => ActionPending = true;
+        public bool CanAct => !IsNight && !ActionPending;
+
+        public void EndAction()
+        {
+            if (!ActionPending) return;
+            ActionPending = false;
+            Slot++;
+        }
 
         // ---------- 낮 ----------
 
