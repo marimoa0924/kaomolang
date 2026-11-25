@@ -299,6 +299,7 @@ namespace Kaomoji
         void Restart()
         {
             S = new GameState();
+            if (!InTutorial) S.RerollFirstDay(); // 튜토리얼이 아니면 1일차 글도 무작위
             open.Clear(); popups.Clear(); toasts.Clear(); floaters.Clear(); diary.Clear(); pledgeSel = null;
             traitsEndNight = false;
             followersAtDayStart = 0;
@@ -349,7 +350,7 @@ namespace Kaomoji
             GUILayout.Label(Cur.Text, new GUIStyle(label) { fontSize = 17 });
             GUILayout.BeginHorizontal();
             GUILayout.Label($"{step + 1}/{steps.Count}", dotStyle, GUILayout.ExpandWidth(false));
-            if (GUILayout.Button("건너뛰기", small, GUILayout.ExpandWidth(false))) pending = () => step = steps.Count;
+            if (GUILayout.Button("건너뛰기", small, GUILayout.ExpandWidth(false))) pending = () => { step = steps.Count; S.RerollFirstDay(); };
             GUILayout.FlexibleSpace();
             if (Cur.Next) Btn("▶", () => step++, true, null, GUILayout.Width(60));
             GUILayout.EndHorizontal();

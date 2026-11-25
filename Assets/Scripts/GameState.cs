@@ -197,6 +197,15 @@ namespace Kaomoji
             Replies = new ReplyState[Tonight.Count];
         }
 
+        // 튜토리얼이 아닐 때: 1일차 글도 전부 풀에서 무작위로 (아직 아무 글에도 답하지 않았을 때만)
+        public void RerollFirstDay()
+        {
+            if (Day != 1 || Replies.Any(r => r != null)) return;
+            Tonight = poolOrder.Skip(poolNext).Take(Balance.PostsPerNight).ToList();
+            poolNext += Tonight.Count;
+            Replies = new ReplyState[Tonight.Count];
+        }
+
         public bool NightDone => Uploaded && Replies.All(r => r != null);
         public bool Solved(string s) => Stickers.TryGetValue(s, out var n) && n >= (Traits[Trait.Decode] >= 2 ? 1 : 2);
         public int SolvedCount => Sym.Keys.Count(Solved);

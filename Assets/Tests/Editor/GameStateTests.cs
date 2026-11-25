@@ -97,6 +97,16 @@ namespace Kaomoji.Tests
         }
 
         [Test]
+        public void FirstDayCanBeRandom()
+        {
+            var s = new GameState(4);
+            s.RerollFirstDay();
+            Assert.IsTrue(s.Tonight.All(p => p.Id.StartsWith("r") || p.Id.StartsWith("d")));
+            Assert.IsFalse(s.Tonight.Any(p => p.Author != null)); // 단골의 고정 글(케이크 등) 대신 풀에서
+            Assert.AreEqual(Balance.PostsPerNight, s.Tonight.Count);
+        }
+
+        [Test]
         public void HeldPostReturnsAsFollowup()
         {
             var s = new GameState(1);
