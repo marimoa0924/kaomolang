@@ -505,7 +505,7 @@ namespace Kaomoji
             {
                 ("icon_outing", "→", "외출", () => Open(Win.Places), S.CanAct, S.IsNight ? "밤엔 밖에 나가지 않는다.\n지금은 SNS 시간!" : WaitClose),
                 ("icon_home", "△", "집", () => Open(Win.Home), S.CanAct, S.IsNight ? "밤엔 집 활동 대신\nSNS를 하자." : WaitClose),
-                ("icon_sns", "((•))", "SNS", () => { S.MarkSeen(); Open(Win.Sns); Open(Win.Notebook); focusReq = (int)Win.Sns + 1; }, S.IsNight, "SNS는 밤에 열린다.\n오전·오후에 먼저 움직이자."),
+                ("icon_sns", "((•))", "SNS", () => { S.MarkSeen(); commentScroll = Vector2.zero; Open(Win.Sns); Open(Win.Notebook); focusReq = (int)Win.Sns + 1; }, S.IsNight, "SNS는 밤에 열린다.\n오전·오후에 먼저 움직이자."),
                 ("icon_traits", "↑", "특성", () => Open(Win.Traits), true, null),
             };
             for (int i = 0; i < icons.Length; i++)
@@ -920,7 +920,7 @@ namespace Kaomoji
             GUILayout.BeginHorizontal();
             if (GUILayout.Button($"▣ 내 게시물  {(S.Uploaded ? "●" : "○")}", snsTab == 0 ? tabOn : tabOff, GUILayout.Height(34)) && !blocked) snsTab = 0;
             Mark("tab_post");
-            if (GUILayout.Button($"@ 멘션  {S.Replies.Length - left}/{S.Replies.Length}", snsTab == 1 ? tabOn : tabOff, GUILayout.Height(34)) && !blocked) snsTab = 1;
+            if (GUILayout.Button($"@ 멘션  {S.Replies.Length - left}/{S.Replies.Length}", snsTab == 1 ? tabOn : tabOff, GUILayout.Height(34)) && !blocked) { snsTab = 1; commentScroll = Vector2.zero; } // 멘션은 맨 위 글부터
             Mark("tab_mention");
             GUILayout.EndHorizontal();
             GUILayout.Space(4);
