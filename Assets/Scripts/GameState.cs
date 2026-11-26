@@ -17,12 +17,14 @@ namespace Kaomoji
         public bool Held => R == null;
     }
 
-    // 단골 친밀도에 따른 답장 조립 규칙 (Florence: 친해질수록 조각이 줄어든다)
+    // 답장 조립 규칙: 서운한 단골에게는 입 후보가 따끔·쿨만 (Florence의 각진 조각)
     public class ComposeRule
     {
-        public List<Emo> Eyes, Mouths; // null이면 제한 없음
-        public Emo? AutoMouth;         // 입이 저절로 채워진다
+        public List<Emo> Mouths; // null이면 제한 없음
     }
+
+    // P2 기능은 설정에서 하나씩 끄고 켠다: 시스템을 한꺼번에 검증하면 무엇이 재미를 만들었는지 모른다
+    public enum Feature { Intimacy, PlaceAbility, Notices, Street, BlankPosts, Misuse }
 
     public class GameState
     {
@@ -54,7 +56,21 @@ namespace Kaomoji
 
         // 아침 유행 공지
         public Notice Today;
-        public bool NoticesEnabled = true; // 테스트용
+        public bool NoticesEnabled { get => On(Feature.Notices); set { if (value) Off.Remove(Feature.Notices); else Off.Add(Feature.Notices); } }
+
+        // 테스트 설정: 1차는 P1만 켜고 5일, 2차는 P2까지 켜고 15일
+        public HashSet<Feature> Off = new();
+        public bool On(Feature f) => !Off.Contains(f);
+        public int LastDay = Balance.Days;
+
+        // 랜덤 판정은 날짜별 시드로 고정: 되돌아가도 같은 조건이면 같은 결과
+        readonly int runSeed;
+        int wobbleRolls, dangerPerfects;
+        double DayRoll(int salt) => new Random(unchecked(runSeed * 397 + Day * 7919 + salt)).NextDouble();
+        public bool Maintenance; // 셧다운 다음 날: 공지 대신 정비 카드, 의심 증가 절반
+        bool maintenanceNext;
+        public bool PendingHidden; // 호감 2단계부터: NPC가 기분을 숨겨 말 대신 장면으로 읽는다
+        public Dictionary<string, HashSet<string>> Habits = new(); // 단골의 말버릇 기호
         HashSet<NoticeKind> usedNotices = new();
 
         // 얼굴 기록: 따라 하기의 날, 얼굴 품귀, 거리 말풍선
@@ -79,7 +95,8 @@ namespace Kaomoji
 
         public GameState(int? seed = null)
         {
-            rng = seed.HasValue ? new Random(seed.Value) : new Random();
+            runSeed = seed ?? Environment.TickCount;
+            rng = new Random(runSeed);
             poolOrder = Pool.OrderBy(_ => rng.Next()).ToList(); // 다회차: 판마다 다른 글
             StartDay();
         }
@@ -96,6 +113,7 @@ namespace Kaomoji
             c.Pencil = new(Pencil); c.Scraps = new(Scraps); c.RegularHappy = new(RegularHappy); c.Traits = new(Traits);
             c.NewAbilities = new(NewAbilities); c.usedNotices = new(usedNotices); c.faceUseToday = new(faceUseToday);
             c.Tonight = new(Tonight); c.Replies = (ReplyState[])Replies.Clone(); c.literalPending = new(literalPending); c.usedPool = new(usedPool);
+            c.Off = new(Off); c.Habits = Habits.ToDictionary(x => x.Key, x => new HashSet<string>(x.Value));
             return c;
         }
 
@@ -130,7 +148,7 @@ namespace Kaomoji
 
         void AddSus(float n)
         {
-            if (n > 0) susRose = true;
+            if (n > 0) { susRose = true; if (Maintenance) n /= 2; }
             Sus = Math.Clamp(Sus + n, 0, 100);
             if (Sus >= 100 && Ending == Ending.None) Ending = Ending.Found;
         }
@@ -147,8 +165,7 @@ namespace Kaomoji
             // 100 판정 (Darkest Dungeon의 결의 판정): 한 판에 한 번. 대개 셧다운, 가끔 각성
             BrokeDown = true;
             FatMax = Balance.FatMaxAfterBreakdown;
-            double chance = AwakenChanceOverride ?? Balance.AwakenChance + (HasAbility("park", 3) ? Balance.AwakenPark : 0) + (sleptPledge ? Balance.AwakenSlept : 0);
-            if (rng.NextDouble() < chance)
+            if (DayRoll(1) < AwakenChance)
             {
                 JustAwakened = true; // 각성: 그날은 끝나지 않고, 피로 70, 그날 밤 성공이 완벽으로
                 AwakenDay = Day;
@@ -156,9 +173,18 @@ namespace Kaomoji
                 return;
             }
             JustBrokeDown = true;
+            maintenanceNext = true;
             Fat += Balance.BreakdownFat;
             AddSus(Traits[Trait.Mimic] >= 2 ? Balance.BreakdownSus / 2 : Balance.BreakdownSus);
         }
+
+        // 각성 확률: 기본 20% + 위험 구간 완벽 답장마다 5%(최대 20%) + 공원 3단계 + 잠 다짐
+        public double AwakenChance => AwakenChanceOverride ?? Balance.AwakenChance + Math.Min(dangerPerfects, 4) * 0.05
+            + (HasAbility("park", 3) ? Balance.AwakenPark : 0) + (sleptPledge ? Balance.AwakenSlept : 0);
+
+        // 입력 흔들림: 위험 구간에서 파츠를 고를 때마다 굴린다. 편의점 3단계면 확률 절반
+        public double WobbleChance => Balance.InputWobble * (HasAbility("store", 3) ? 0.5 : 1);
+        public bool RollWobble() => InDanger && DayRoll(100 + wobbleRolls++) < WobbleChance;
 
         // 행동을 마쳐도 결과 창을 닫을 때(EndAction)까지 시간은 흐르지 않는다
         public bool ActionPending { get; private set; }
@@ -177,7 +203,7 @@ namespace Kaomoji
         // ---------- 장소 호감 단계와 능력 (Persona 5) ----------
 
         public int AffLevel(string place) => Aff.GetValueOrDefault(place);
-        public bool HasAbility(string place, int lv) => AffLevel(place) >= lv;
+        public bool HasAbility(string place, int lv) => On(Feature.PlaceAbility) && AffLevel(place) >= lv;
 
         void WinAt(string place)
         {
@@ -187,7 +213,7 @@ namespace Kaomoji
             if (AffWins[place] < Balance.AffNeed[lv]) return;
             AffWins[place] = 0;
             Aff[place] = lv + 1;
-            if (Abilities.ContainsKey((place, lv + 1))) NewAbilities.Add((place, lv + 1));
+            if (On(Feature.PlaceAbility) && Abilities.ContainsKey((place, lv + 1))) NewAbilities.Add((place, lv + 1));
         }
 
         // ---------- 낮 ----------
@@ -202,6 +228,7 @@ namespace Kaomoji
                 ? extras[rng.Next(extras.Count)]
                 : p.Story[Math.Min(AffLevel(placeId), 2)][rng.Next(2)]; // 같은 단계라도 장면은 두 가지 중 하나
             PendingPlace = placeId;
+            PendingHidden = Pending.Kind == EvKind.Npc && AffLevel(placeId) >= 2 && rng.NextDouble() < 0.5;
             return Pending;
         }
 
@@ -287,20 +314,36 @@ namespace Kaomoji
         void StartDay()
         {
             susRose = false;
+            wobbleRolls = 0;
+            Maintenance = maintenanceNext; maintenanceNext = false;
             snackFatToday = snackFat; snackFat = 0;
             sulkyTonight = sulky; sulky = new();
             PickNotice();
             if (Is(NoticeKind.QuietNight)) AddFat(-5);
             if (Is(NoticeKind.AllNighter)) AddFat(10);
             if (Is(NoticeKind.HoldoutSilence)) AddSus(-5);
-            if (Intimacy.GetValueOrDefault(Doubter) >= 3) AddSus(-5); // 의심하는자 친밀도 3: 매일 의심 −5
+            if (IntimacyOf(Doubter) >= 3) AddSus(-5); // 의심하는자 친밀도 3: 매일 의심 −5
 
             // 단골의 이야기 글(그날 몫) + 나머지는 회차마다 섞인 풀에서 차례로
             var regulars = Day <= Posts.Length ? Posts[Day - 1].Where(p => p.Author != null) : Enumerable.Empty<Post>();
             Tonight = regulars.Select(p => p.Bad != null && RegularHappy.TryGetValue(p.Author, out var ok) && !ok ? p.Bad : p).ToList();
+            // 친해진 단골은 글이 미묘해진다: 1 시너지 글, 2 빈칸 글, 3 정답이 둘이거나 섬뜩을 반기는 글
+            for (int k = 0; k < Tonight.Count; k++)
+            {
+                var reg = Tonight[k];
+                int lv = ClueLevel(reg.Author);
+                if (lv < 1 || rng.NextDouble() >= 0.5) continue;
+                Func<Post, bool> harder = lv >= 3 ? q => q.Answers.Length > 1 || q.WantsCreepy
+                    : lv == 2 && On(Feature.BlankPosts) ? q => q.IsBlank
+                    : q => !q.IsBlank && q.Answers.Any(a => a.Eye != a.Mouth);
+                if (NextPool(harder) is not { } src) continue;
+                var v = src.Clone();
+                v.Author = reg.Author; v.Id = $"i{Day}_{k}"; v.Holdout = false;
+                Tonight[k] = v;
+            }
             int slots = Is(NoticeKind.QuietNight) ? Balance.PostsPerNight - 1 : Balance.PostsPerNight;
-            while (Tonight.Count < slots && NextPool(p => true) is { } next) Tonight.Add(next);
-            if (Is(NoticeKind.DoubleFace) && !Tonight.Any(p => p.IsBlank) && NextPool(p => p.IsBlank) is { } blank)
+            while (Tonight.Count < slots && NextPool(p => On(Feature.BlankPosts) || !p.IsBlank) is { } next) Tonight.Add(next);
+            if (Is(NoticeKind.DoubleFace) && On(Feature.BlankPosts) && !Tonight.Any(p => p.IsBlank) && NextPool(p => p.IsBlank) is { } blank)
             {
                 int slot = Tonight.FindLastIndex(p => p.Author == null);
                 if (slot >= 0) Tonight[slot] = blank; else Tonight.Add(blank);
@@ -367,11 +410,11 @@ namespace Kaomoji
         void PickNotice()
         {
             Today = null;
-            if (!NoticesEnabled || Day < 2) return;
-            if (Day >= Balance.Days) { Today = FinalNotice; return; }
-            if (Day == Balance.Days - 1) { Today = Notices.First(n => n.Kind == NoticeKind.MimicDay); return; } // 따라 하기 카드
+            if (!NoticesEnabled || Day < 2 || Maintenance) return;
+            if (Day >= LastDay) { Today = FinalNotice; return; }
+            if (Day == LastDay - 1 && LastDay == Balance.Days) { Today = Notices.First(n => n.Kind == NoticeKind.MimicDay); return; } // 따라 하기 카드
             bool half = Followers >= Balance.FollowerGoal * Balance.UneasyFrom;
-            var ok = Notices.Where(n => n.Kind != NoticeKind.MimicDay && n.MinAct <= Act && Act <= n.MaxAct && !usedNotices.Contains(n.Kind) && (!n.NeedHalf || half)).ToList();
+            var ok = Notices.Where(n => n.Kind != NoticeKind.MimicDay && n.MinAct <= Act && Act <= n.MaxAct && !usedNotices.Contains(n.Kind) && (!n.NeedHalf || half) && (n.Kind != NoticeKind.DoubleFace || On(Feature.BlankPosts))).ToList();
             if (ok.Count == 0) return;
             Today = ok[rng.Next(ok.Count)];
             usedNotices.Add(Today.Kind);
@@ -425,12 +468,14 @@ namespace Kaomoji
 
         // ---------- 단골 친밀도 ----------
 
-        public int IntimacyOf(string author) => author == null ? 0 : Intimacy.GetValueOrDefault(author);
+        public int IntimacyOf(string author) => author == null || !On(Feature.Intimacy) ? 0 : Intimacy.GetValueOrDefault(author);
+        // 열려 있는 단서 수: 서운한 밤엔 하나 닫힌다
+        public int ClueLevel(string author) => Math.Max(0, IntimacyOf(author) - (SulkyTonight(author) ? 1 : 0));
         public bool SulkyTonight(string author) => author != null && sulkyTonight.Contains(author);
 
         void Bond(string author, bool good)
         {
-            if (author == null || !Regulars.Contains(author)) return;
+            if (author == null || !Regulars.Contains(author) || !On(Feature.Intimacy)) return;
             int lv = IntimacyOf(author);
             if (good)
             {
@@ -439,29 +484,14 @@ namespace Kaomoji
                 if (IntimacyWins[author] >= Balance.IntimacyNeed[lv]) { Intimacy[author] = lv + 1; IntimacyWins[author] = 0; }
                 return;
             }
-            // 서운함: 친밀도가 떨어지면 다음 밤 그 단골의 글은 칸이 다 열리고 입은 따끔·쿨만
+            // 서운함: 다음 밤 그 단골의 단서가 하나 닫히고 입은 따끔·쿨만
             if (lv > 0) Intimacy[author] = lv - 1;
             IntimacyWins[author] = 0;
             sulky.Add(author);
         }
 
-        public ComposeRule RuleFor(Post post)
-        {
-            var rule = new ComposeRule();
-            if (post.Author == null || !Regulars.Contains(post.Author) || post.IsBlank) return rule;
-            if (SulkyTonight(post.Author)) { rule.Mouths = new() { Emo.Anger, Emo.Surprise }; return rule; }
-            int lv = IntimacyOf(post.Author), seed = post.Id.Sum(c => c);
-            var ans = post.Answers[0];
-            var others = Feelings.Where(e => e != ans.Mouth).ToList();
-            if (lv == 1) rule.Mouths = new() { ans.Mouth, others[seed % others.Count], others[(seed + 2) % others.Count] };
-            if (lv >= 2) rule.AutoMouth = ans.Mouth;
-            if (lv >= 3)
-            {
-                var eyes = Feelings.Where(e => e != ans.Eye).ToList();
-                rule.Eyes = new() { ans.Eye, eyes[seed % eyes.Count] };
-            }
-            return rule;
-        }
+        public ComposeRule RuleFor(Post post) =>
+            SulkyTonight(post.Author) && On(Feature.Intimacy) && !post.IsBlank ? new ComposeRule { Mouths = new() { Emo.Anger, Emo.Surprise } } : new ComposeRule();
 
         // ---------- 밤 ----------
 
@@ -540,7 +570,7 @@ namespace Kaomoji
         {
             var post = Tonight[idx];
             var (r, f, s) = Score(post, post.Answers, eye, mouth, glitched);
-            if (post.Holdout) s += Balance.HoldoutSus; // 아직 글자를 쓰는 정상인에게 답하면 의심이 크게 더 오른다
+            if (post.Holdout) s += IntimacyOf(Doubter) >= 3 ? Balance.HoldoutSus / 2 : Balance.HoldoutSus; // 의심하는자 친밀도 3이면 절반 // 아직 글자를 쓰는 정상인에게 답하면 의심이 크게 더 오른다
             if (post.Author == Doubter)
             {
                 if (r == Result.Wrong) s = Balance.DoubterWrongSus;
@@ -551,7 +581,7 @@ namespace Kaomoji
                 if (r is Result.Perfect or Result.Success) s -= 5;  // 오해가 풀렸다
                 else MisusedFaces.Add(post.Misuse);                  // 그 얼굴이 계속 엉뚱하게 쓰인다 (거리에도)
             }
-            if (post.Literal && r is Result.Wrong or Result.Creepy) literalPending.Add((post, Face(eye, mouth)));
+            if (post.Literal && On(Feature.Misuse) && r is Result.Wrong or Result.Creepy) literalPending.Add((post, Face(eye, mouth)));
             var newly = Finish(post, r, f, s);
             var syn = SynergyOf(eye, mouth);
             Answer newSyn = syn != null && FoundSynergies.Add(syn.Name) ? syn : null;
@@ -577,6 +607,7 @@ namespace Kaomoji
 
         List<string> Finish(Post post, Result r, float f, float s)
         {
+            if (InDanger && r == Result.Perfect && !BrokeDown) dangerPerfects++;
             Followers = Math.Max(0, Followers + (int)f);
             AddSus(s);
             AddFat(Balance.FatReply);
@@ -611,7 +642,12 @@ namespace Kaomoji
 
         public void MarkSeen()
         {
-            foreach (var p in Tonight) foreach (var t in p.Text.Split(' ')) if (Sym.ContainsKey(t)) Seen.Add(t);
+            foreach (var p in Tonight)
+                foreach (var t in p.Text.Split(' ').Where(Sym.ContainsKey))
+                {
+                    Seen.Add(t);
+                    if (p.Author != null && Regulars.Contains(p.Author)) (Habits.TryGetValue(p.Author, out var h) ? h : Habits[p.Author] = new()).Add(t);
+                }
         }
 
         public bool CanRaise(Trait t) => Points > 0 && Traits[t] < 2;
@@ -647,7 +683,7 @@ namespace Kaomoji
             MostUsedYesterday = faceUseToday.Count > 0 ? faceUseToday.OrderByDescending(x => x.Value).First().Key : null;
             faceUseToday.Clear();
             sleptPledge = false;
-            if (Day >= Balance.Days) { Ending = FinalEnding(); return; }
+            if (Day >= LastDay) { Ending = FinalEnding(); return; }
             Day++;
             Slot = Slot.Morning;
             Uploaded = HeldTonight = false;

@@ -37,7 +37,7 @@ namespace Kaomoji
         // 정산 회복 선택 (잠 -12를 대신한다)
         public const float RestSleep = -12, RestTrue = -25, RestTrueSus = 5, RestCall = -8, RestSnack = -15, SnackOutingFat = 3;
         public const int ConfirmFollowers = 150; // 그림 페이지 묶음 확정
-        public static readonly int[] AffNeed = { 1, 2, 4 };      // 장소 호감 0→1, 1→2, 2→3에 필요한 성공 수
+        public static readonly int[] AffNeed = { 1, 2, 3 };      // 장소 호감 0→1, 1→2, 2→3에 필요한 성공 수
         public static readonly int[] IntimacyNeed = { 2, 3, 4 }; // 단골 친밀도
         public const float BreakdownSus = 30, BreakdownFat = -50, FatMaxAfterBreakdown = 120;
         public const float DoubterWrongSus = 15, DoubterPerfectSus = -10;

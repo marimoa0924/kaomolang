@@ -286,30 +286,117 @@ namespace Kaomoji.Tests
         public void PlaceAffinityUnlocksAbilities()
         {
             var s = new GameState(2) { NoExtras = true };
-            for (int i = 0; i < 7; i++)
+            for (int i = 0; i < 6; i++)
             {
                 var ev = s.PrepareOuting("cafe");
                 s.DoEncounter(ev.Fits[0]);
                 s.EndAction();
             }
-            Assert.AreEqual(3, s.AffLevel("cafe")); // 1 + 2 + 4
+            Assert.AreEqual(3, s.AffLevel("cafe")); // 1 + 2 + 3
             Assert.IsTrue(s.NewAbilities.Contains(("cafe", 3)));
         }
 
         [Test]
-        public void IntimacyShrinksComposer()
+        public void IntimacyOpensCluesAndHarderPosts()
         {
-            var s = new GameState(1);
+            var s = new GameState(1) { NoticesEnabled = false };
             var star = s.Tonight[0];
             Assert.AreEqual(GameData.Starlover, star.Author);
-            Assert.IsNull(s.RuleFor(star).Mouths);
-            s.Intimacy[GameData.Starlover] = 2;
-            Assert.AreEqual(star.Answers[0].Mouth, s.RuleFor(star).AutoMouth);
+            Assert.IsNull(s.RuleFor(star).Mouths);          // 친해져도 조각은 줄지 않는다
             s.Intimacy[GameData.Starlover] = 3;
-            Assert.AreEqual(2, s.RuleFor(star).Eyes.Count);
-            s.Intimacy[GameData.Starlover] = 1;
-            s.DoReply(0, Wrong(star.Answers), Emo.Neutral); // 틀리면 서운함
-            Assert.AreEqual(0, s.IntimacyOf(GameData.Starlover));
+            Assert.AreEqual(3, s.ClueLevel(GameData.Starlover));
+            s.DoReply(0, Wrong(star.Answers), Emo.Neutral);  // 틀리면 서운함: 한 단계 내려가고 단서 하나가 더 닫힌다
+            s.EndNight();
+            Assert.AreEqual(2, s.IntimacyOf(GameData.Starlover));
+            Assert.AreEqual(1, s.ClueLevel(GameData.Starlover));
+            // 친밀도 3 단골의 글은 정답이 둘이거나 섬뜩을 반기는 글로 바뀔 수 있다
+            var t = new GameState(3) { NoticesEnabled = false };
+            foreach (var r in GameData.Regulars) t.Intimacy[r] = 3;
+            var harder = 0;
+            for (int d = 0; d < 12; d++) { t.EndNight(); harder += t.Tonight.Count(p => p.Id.StartsWith("i") && (p.Answers.Length > 1 || p.WantsCreepy)); }
+            Assert.Greater(harder, 0);
+            t.Off.Add(Feature.Intimacy);                     // 끄면 친밀도 효과가 없다
+            Assert.AreEqual(0, t.IntimacyOf(GameData.Starlover));
+        }
+
+        [Test]
+        public void HabitsCollectForRegulars()
+        {
+            var s = new GameState(1);
+            s.MarkSeen();
+            Assert.IsTrue(s.Habits[GameData.Starlover].Contains("☆"));
+        }
+
+        [Test]
+        public void AwakenIsSeededPerDayAndPerfectsRaiseIt()
+        {
+            var s = new GameState(9) { Fat = 80 };
+            double c0 = s.AwakenChance;
+            s.DoReply(0, s.Tonight[0].Answers[0].Eye, s.Tonight[0].Answers[0].Mouth); // 위험 구간 완벽
+            Assert.AreEqual(c0 + 0.05, s.AwakenChance, 1e-9);
+            // 같은 저장에서 다시 해도 같은 결과
+            var a = new GameState(5) { Fat = 95 }; var b = a.Clone();
+            a.PrepareOuting("park"); a.DoEncounter(Emo.Joy);
+            b.PrepareOuting("park"); b.DoEncounter(Emo.Joy);
+            Assert.AreEqual(a.JustAwakened, b.JustAwakened);
+            Assert.AreEqual(a.JustBrokeDown, b.JustBrokeDown);
+        }
+
+        [Test]
+        public void ShutdownGivesMaintenanceDay()
+        {
+            var s = new GameState(1) { Fat = 95, AwakenChanceOverride = 0 };
+            s.PrepareOuting("park"); s.DoEncounter(Emo.Joy);
+            s.ForceEndDay();
+            Assert.IsTrue(s.Maintenance);
+            Assert.IsNull(s.Today);
+            float s0 = s.Sus;
+            s.DoReply(1, Emo.Neutral, Emo.Neutral);
+            s.DoReply(0, Wrong(s.Tonight[0].Answers), Emo.Neutral);
+            Assert.Less(s.Sus - s0, 10); // 오답 +10이 절반
+        }
+
+        [Test]
+        public void FeatureTogglesAndTestLength()
+        {
+            var s = new GameState(2) { LastDay = 5, NoExtras = true };
+            s.Off.Add(Feature.PlaceAbility);
+            for (int i = 0; i < 3; i++) { var ev = s.PrepareOuting("store"); s.DoEncounter(ev.Fits[0]); s.EndAction(); }
+            Assert.AreEqual(2, s.AffLevel("store"));
+            Assert.IsFalse(s.HasAbility("store", 2));
+            Assert.AreEqual(0, s.NewAbilities.Count);
+            s.Off.Add(Feature.BlankPosts);
+            for (int d = 0; d < 5; d++) { Assert.IsFalse(s.Tonight.Any(p => p.IsBlank)); s.EndNight(); }
+            Assert.AreNotEqual(Ending.None, s.Ending); // 5일로 끝난다
+        }
+
+        [Test]
+        public void HiddenMoodFromAffinityTwo()
+        {
+            var s = new GameState(4) { NoExtras = true };
+            s.Aff["cafe"] = 2;
+            bool hid = false;
+            for (int i = 0; i < 20; i++) { s.PrepareOuting("cafe"); hid |= s.PendingHidden; }
+            Assert.IsTrue(hid);
+            s.Aff["cafe"] = 1;
+            for (int i = 0; i < 20; i++) { s.PrepareOuting("cafe"); Assert.IsFalse(s.PendingHidden); }
+        }
+
+        [Test]
+        public void DoubterAndStoreAbilities()
+        {
+            var s = new GameState(3);
+            s.Intimacy[GameData.Doubter] = 3;
+            s.Followers = (int)(Balance.FollowerGoal * Balance.UneasyFrom);
+            s.NoticesEnabled = false;
+            s.EndNight();
+            int idx = s.Tonight.FindIndex(p => p.Holdout);
+            float s0 = s.Sus;
+            s.DoReply(idx, Emo.Neutral, Emo.Neutral);
+            Assert.AreEqual(Balance.HoldoutSus / 2, s.Sus - s0, 0.01);
+            Assert.AreEqual(Balance.InputWobble, s.WobbleChance, 1e-9);
+            s.Aff["store"] = 3;
+            Assert.AreEqual(Balance.InputWobble / 2, s.WobbleChance, 1e-9);
         }
 
         [Test]
