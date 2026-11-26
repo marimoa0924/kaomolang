@@ -478,5 +478,40 @@ namespace Kaomoji.Tests
             e.DoReply(1, Wrong(e.Tonight[1].Answers), Emo.Neutral);
             Assert.GreaterOrEqual(e.Followers, f0);      // 공감 5: 오답에도 줄지 않는다
         }
+
+        // 진짜 Unlocks.csv를 읽는다. 테스트 파일 위치에서 찾아가야 Unity와 dotnet 둘 다 돼
+        static System.Collections.Generic.Dictionary<Feature, Unlock> RealUnlocks([System.Runtime.CompilerServices.CallerFilePath] string here = "") =>
+            GameData.ParseUnlocks(System.IO.File.ReadAllText(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(here), "..", "..", "Resources", "Unlocks.csv")));
+
+        [Test]
+        public void LearningMapOpensOneRuleADay()
+        {
+            var t = RealUnlocks();
+            var days = t.Where(x => x.Value.On).GroupBy(x => x.Value.Day).ToDictionary(g => g.Key, g => g.Count());
+            Assert.IsTrue(days.All(d => d.Value == 1 || d.Key == 4), "하루 하나 (4일만 연필+말풍선)");
+            Assert.IsFalse(t[Feature.Intimacy].On);
+            Assert.IsTrue(t.Where(x => x.Value.On).All(x => x.Value.Tip.Length > 0 && !x.Value.Tip.Contains("\n")), "안내는 한 줄");
+
+            var old = GameData.UnlockTable;
+            GameData.UnlockTable = t;
+            try
+            {
+                var s = new GameState(1);
+                Assert.IsFalse(s.On(Feature.Hits));
+                s.Fat = 95; s.PrepareOuting("park"); s.DoEncounter(Emo.Joy);
+                Assert.AreEqual(99, s.Fat, 0.01);           // 100 판정 전엔 99에서 멈춘다
+                Assert.IsFalse(s.BrokeDown);
+                s.EndNight();                                  // 회복 선택 전엔 그냥 잔다
+                Assert.AreEqual(99 + Balance.RestSleep, s.Fat, 0.01);
+                while (s.Day < t[Feature.Recovery].Day) s.EndNight();
+                CollectionAssert.AreEqual(new[] { Recovery.Sleep, Recovery.TrueForm }, s.RecoveryOptions); // 첫날은 둘만
+                s.EndNight();
+                Assert.Contains(Recovery.HomeCall, s.RecoveryOptions);
+                while (s.Day < t[Feature.Notices].Day) { Assert.IsNull(s.Today); s.EndNight(); }
+                Assert.AreEqual(NoticeKind.HeartDay, s.Today.Kind); // 첫 공지는 쉬운 카드
+                while (s.Day < t[Feature.BlankPosts].Day) { Assert.IsFalse(s.Tonight.Any(p => p.IsBlank)); s.EndNight(); }
+            }
+            finally { GameData.UnlockTable = old; }
+        }
     }
 }

@@ -23,8 +23,12 @@ namespace Kaomoji
         public List<Emo> Mouths; // null이면 제한 없음
     }
 
-    // P2 기능은 설정에서 하나씩 끄고 켠다: 시스템을 한꺼번에 검증하면 무엇이 재미를 만들었는지 모른다
-    public enum Feature { Intimacy, PlaceAbility, Notices, Street, BlankPosts, Misuse }
+    // 시스템마다 스위치와 처음 열리는 날이 있어. 하루에 새 규칙 하나씩 배우게 하려고 Unlocks.csv로 관리해
+    public enum Feature
+    {
+        Hits, Pencil, Street, Page, FatigueFx, Recovery, Typing, Notices, Awaken, Misuse, BlankPosts, // 학습 지도에 있는 것
+        PlaceAbility, Intimacy, DecorMix, SecondSet, HiddenMood, Maintenance, Rewind,                 // 미뤄 둔 것 (기본 꺼짐)
+    }
 
     public class GameState
     {
@@ -60,7 +64,10 @@ namespace Kaomoji
 
         // 테스트 설정: 1차는 P1만 켜고 5일, 2차는 P2까지 켜고 15일
         public HashSet<Feature> Off = new();
-        public bool On(Feature f) => !Off.Contains(f);
+        public Dictionary<Feature, Unlock> Unlocks = new(GameData.UnlockTable); // 판마다 복사해 둬야 테스트에서 따로 바꿀 수 있어
+        public bool On(Feature f) => !Off.Contains(f) && Unlocks.TryGetValue(f, out var u) && u.On && Day >= u.Day; // 꺼져 있거나 아직 그날이 안 됐으면 없는 시스템
+        public bool OpensToday(Feature f) => On(f) && Unlocks[f].Day == Day;
+        public void UnlockAll() { foreach (var f in Unlocks.Keys.ToList()) Unlocks[f] = new Unlock(1, true, Unlocks[f].Tip); } // 테스트용: 규칙만 보고 싶을 때
         public int LastDay = Balance.Days;
 
         // 랜덤 판정은 날짜별 시드로 고정: 되돌아가도 같은 조건이면 같은 결과
@@ -113,7 +120,7 @@ namespace Kaomoji
             c.Pencil = new(Pencil); c.Scraps = new(Scraps); c.RegularHappy = new(RegularHappy); c.Traits = new(Traits);
             c.NewAbilities = new(NewAbilities); c.usedNotices = new(usedNotices); c.faceUseToday = new(faceUseToday);
             c.Tonight = new(Tonight); c.Replies = (ReplyState[])Replies.Clone(); c.literalPending = new(literalPending); c.usedPool = new(usedPool);
-            c.Off = new(Off); c.Habits = Habits.ToDictionary(x => x.Key, x => new HashSet<string>(x.Value));
+            c.Off = new(Off); c.Unlocks = new(Unlocks); c.Habits = Habits.ToDictionary(x => x.Key, x => new HashSet<string>(x.Value));
             return c;
         }
 
@@ -159,7 +166,8 @@ namespace Kaomoji
         void AddFat(float n)
         {
             Fat = Math.Clamp(Fat + n, 0, FatMax);
-            if (InDanger && !gotTentacle) { gotTentacle = true; Decors.Add(Tentacle); } // 위험 구간 첫 진입: 본모습 장식 해금
+            if (!On(Feature.Awaken) && !BrokeDown) Fat = Math.Min(Fat, FatMax - 1); // 100 판정이 열리기 전엔 99에서 멈춰
+            if (InDanger && On(Feature.FatigueFx) && !gotTentacle) { gotTentacle = true; Decors.Add(Tentacle); } // 위험 구간 첫 진입: 본모습 장식 해금
             if (Fat < FatMax || Ending != Ending.None) return;
             if (BrokeDown) { Ending = Ending.Collapse; return; }
             // 100 판정 (Darkest Dungeon의 결의 판정): 한 판에 한 번. 대개 셧다운, 가끔 각성
@@ -184,7 +192,7 @@ namespace Kaomoji
 
         // 입력 흔들림: 위험 구간에서 파츠를 고를 때마다 굴린다. 편의점 3단계면 확률 절반
         public double WobbleChance => Balance.InputWobble * (HasAbility("store", 3) ? 0.5 : 1) * (Traits[Trait.Mimic] >= 3 ? 0.5 : 1); // 의태 3도 절반
-        public bool RollWobble() => InDanger && DayRoll(100 + wobbleRolls++) < WobbleChance;
+        public bool RollWobble() => InDanger && On(Feature.FatigueFx) && DayRoll(100 + wobbleRolls++) < WobbleChance;
 
         // 행동을 마쳐도 결과 창을 닫을 때(EndAction)까지 시간은 흐르지 않는다
         public bool ActionPending { get; private set; }
@@ -228,7 +236,7 @@ namespace Kaomoji
                 ? extras[rng.Next(extras.Count)]
                 : p.Story[Math.Min(AffLevel(placeId), 2)][rng.Next(2)]; // 같은 단계라도 장면은 두 가지 중 하나
             PendingPlace = placeId;
-            PendingHidden = Pending.Kind == EvKind.Npc && AffLevel(placeId) >= 2 && rng.NextDouble() < 0.5;
+            PendingHidden = On(Feature.HiddenMood) && Pending.Kind == EvKind.Npc && AffLevel(placeId) >= 2 && rng.NextDouble() < 0.5;
             return Pending;
         }
 
@@ -280,7 +288,7 @@ namespace Kaomoji
         }
 
         // 장식 조합 (8일차부터, Strange Horticulture의 조제): 장식 둘을 섞어 새 장식 하나
-        public bool CanCombine => Day >= Balance.DecorComboDay && Decors.Count >= 2;
+        public bool CanCombine => On(Feature.DecorMix) && Decors.Count >= 2;
         public Decor CombineDecors(Decor a, Decor b)
         {
             if (!CanCombine || a == b || !Decors.Contains(a) || !Decors.Contains(b)) return null;
@@ -315,7 +323,7 @@ namespace Kaomoji
         {
             susRose = false;
             wobbleRolls = 0;
-            Maintenance = maintenanceNext; maintenanceNext = false;
+            Maintenance = maintenanceNext && On(Feature.Maintenance); maintenanceNext = false;
             snackFatToday = snackFat; snackFat = 0;
             sulkyTonight = sulky; sulky = new();
             PickNotice();
@@ -362,7 +370,7 @@ namespace Kaomoji
             for (int k = 0; k < literalPending.Count; k++) Tonight.Add(MisuseFollowup(literalPending[k].post, literalPending[k].face, Day, k));
             literalPending.Clear();
             // 6일차부터 두 번째 기호 세트(정상인들의 새 유행어)가 섞인다
-            if (Day >= Balance.SecondSetDay) Tonight = Tonight.Select(SecondSetVariant).ToList();
+            if (On(Feature.SecondSet)) Tonight = Tonight.Select(SecondSetVariant).ToList();
             Replies = new ReplyState[Tonight.Count];
 
             // 고향 통신: 못 푼 기호 하나에 정답 감각을 연필로 적어 준다 (확정은 아니다)
@@ -414,6 +422,8 @@ namespace Kaomoji
             if (Day >= LastDay) { Today = FinalNotice; return; }
             if (Day == LastDay - 1 && LastDay == Balance.Days) { Today = Notices.First(n => n.Kind == NoticeKind.MimicDay); return; } // 따라 하기 카드
             bool half = Followers >= Balance.FollowerGoal * Balance.UneasyFrom;
+            // 공지가 처음 열리는 날엔 판단이 쉬운 ♥의 날부터
+            if (OpensToday(Feature.Notices)) { Today = Notices.First(x => x.Kind == NoticeKind.HeartDay); usedNotices.Add(Today.Kind); return; }
             var ok = Notices.Where(n => n.Kind != NoticeKind.MimicDay && n.MinAct <= Act && Act <= n.MaxAct && !usedNotices.Contains(n.Kind) && (!n.NeedHalf || half) && (n.Kind != NoticeKind.DoubleFace || On(Feature.BlankPosts))).ToList();
             if (ok.Count == 0) return;
             Today = ok[rng.Next(ok.Count)];
@@ -440,7 +450,7 @@ namespace Kaomoji
 
         // 검증 대기가 셋 모이면(남은 기호가 셋 미만이면 하나·둘로도) 그림 페이지가 열린다
         int PageSize => Traits[Trait.Decode] >= 3 ? 2 : 3; // 해독 3: 둘만 모여도 그림 페이지
-        public bool CanOpenPage => Day >= PageLockedUntil && (PendingSymbols.Count >= PageSize || (PendingSymbols.Count > 0 && Unconfirmed < PageSize));
+        public bool CanOpenPage => On(Feature.Page) && Day >= PageLockedUntil && (PendingSymbols.Count >= PageSize || (PendingSymbols.Count > 0 && Unconfirmed < PageSize));
         public List<string> PageSymbols => PendingSymbols.Take(PageSize).ToList();
 
         // 짝이 다 맞아야 한꺼번에 확정. 틀리면 어느 것이 틀렸는지 알려 주지 않고 다음 날 밤까지 잠긴다 (카페 3단계면 하나 표시)
@@ -461,6 +471,7 @@ namespace Kaomoji
 
         public void SetPencil(string sym, Emo? e)
         {
+            if (!On(Feature.Pencil)) return;
             if (Confirmed.Contains(sym)) return;
             if (e == null) Pencil.Remove(sym); else Pencil[sym] = e.Value;
         }
@@ -512,7 +523,7 @@ namespace Kaomoji
         // 지친 사진 (Cultist Simulator): 피로 40 이상에서 올린 사진. 정답이 축축이면 더 먹히고 반짝이면 덜 먹힌다
         public float TiredMultiplier(Emo mood)
         {
-            if (!Leaking) return 1;
+            if (!Leaking || !On(Feature.FatigueFx)) return 1;
             if (mood == Emo.Sad) return (InDanger ? Balance.TiredSadDanger : Balance.TiredSad) + (IntimacyOf(Gloomcat) >= 3 ? 0.2f : 0);
             if (mood == Emo.Joy) return Balance.TiredJoy;
             return 1;
@@ -533,7 +544,7 @@ namespace Kaomoji
             }
             if (f > 0 && IntimacyOf(Starlover) >= 3) f *= 1.2f; // 별빛러버 친밀도 3: 좋아요 +20%
             if (decor != null) f += Balance.DecorBonus * (Is(NoticeKind.DecorBoom) ? 2 : 1);
-            if (InDanger && Traits[Trait.Mimic] < 4) s += Balance.DangerPostSus; // 의태 4: 위험 구간 게시물 의심 없음
+            if (InDanger && On(Feature.FatigueFx) && Traits[Trait.Mimic] < 4) s += Balance.DangerPostSus; // 의태 4: 위험 구간 게시물 의심 없음
             if (Is(NoticeKind.StarBan) && (eye == Emo.Joy || mouth == Emo.Joy)) s += 5;
             Followers = Math.Max(0, Followers + (int)f);
             AddSus(s);
@@ -674,6 +685,17 @@ namespace Kaomoji
 
         // 정산 회복 선택 (Papers, Please의 저녁 지출): 잠들기 전에 하나. 잠 −12를 대신한다
         public bool CanSnack => HasAbility("store", 2);
+        // 회복 선택이 열린 첫날엔 둘만: 그냥 자기와 본모습. 다음 날부터 고향 통신, 야식은 편의점 능력
+        public List<Recovery> RecoveryOptions
+        {
+            get
+            {
+                var list = new List<Recovery> { Recovery.Sleep, Recovery.TrueForm };
+                if (On(Feature.Recovery) && !OpensToday(Feature.Recovery)) list.Add(Recovery.HomeCall);
+                if (CanSnack) list.Add(Recovery.Snack);
+                return list;
+            }
+        }
         public void ApplyRecovery(Recovery r)
         {
             switch (r)
@@ -704,6 +726,7 @@ namespace Kaomoji
 
         public void EndNight()
         {
+            if (!On(Feature.Recovery) && Ending == Ending.None) AddFat(Balance.RestSleep); // 회복 선택 전엔 그냥 잔다
             GrantNightPoint();
             nightPointGiven = false;
             if (Ending != Ending.None) return;

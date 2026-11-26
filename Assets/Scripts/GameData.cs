@@ -118,8 +118,33 @@ namespace Kaomoji
         public Post Clone() => (Post)MemberwiseClone();
     }
 
+    // 해금 표 한 줄: 몇 일차에 열리는지, 켜져 있는지, 열리는 날 코치가 짚어 줄 한 줄
+    public readonly struct Unlock
+    {
+        public readonly int Day; public readonly bool On; public readonly string Tip;
+        public Unlock(int day, bool on, string tip) { Day = day; On = on; Tip = tip; }
+    }
+
     public static class GameData
     {
+        // 기본은 전부 1일에 켜짐: 규칙 테스트가 학습 지도에 묶이지 않게. 게임은 Unlocks.csv를 읽어 덮어써
+        public static Dictionary<Feature, Unlock> UnlockTable = Enum.GetValues(typeof(Feature)).Cast<Feature>().ToDictionary(f => f, f => new Unlock(1, true, ""));
+
+        // CSV 형식: 시스템,열리는 날,켜짐(1/0),안내 한 줄. #으로 시작하는 줄과 모르는 이름은 건너뛰어
+        public static Dictionary<Feature, Unlock> ParseUnlocks(string csv)
+        {
+            var table = new Dictionary<Feature, Unlock>(UnlockTable); // 표에 없는 시스템은 기본값 그대로
+            foreach (var raw in csv.Split('\n'))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0 || line.StartsWith("#")) continue;
+                var f = line.Split(new[] { ',' }, 4); // 안내 문구엔 쉼표가 들어갈 수 있어서 넷으로만 자른다
+                if (f.Length < 3 || !Enum.TryParse(f[0].Trim(), out Feature key) || !int.TryParse(f[1].Trim(), out var day)) continue;
+                table[key] = new Unlock(day, f[2].Trim() == "1", f.Length > 3 ? f[3].Trim() : "");
+            }
+            return table;
+        }
+
         public const string Starlover = "별빛러버", Gloomcat = "우울한고양이", Doubter = "의심하는자";
         public static readonly string[] Regulars = { Starlover, Gloomcat, Doubter };
         public static readonly Emo[] Feelings = { Emo.Joy, Emo.Sad, Emo.Anger, Emo.Surprise, Emo.Shy };
