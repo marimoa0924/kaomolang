@@ -1918,9 +1918,9 @@ namespace Kaomoji
         void DrawTraits()
         {
             GUILayout.Label($"↑ {S.Points}", new GUIStyle(dotStyle) { fontSize = 22 });
-            TraitRow(Trait.Decode, "해독", "단서 +1", "스티커 1장으로 해독");
-            TraitRow(Trait.Mimic, "의태", $"외출 피로 {Balance.FatOut} → {Balance.FatOutMimic}", "멘탈붕괴 때 의심 절반");
-            TraitRow(Trait.Empathy, "공감", "팬 글에 감정 색", "섬뜩해도 의심 그대로");
+            TraitRow(Trait.Decode, "해독", "단서 +1", "스티커 1장으로 검증 대기", "그림 페이지가 둘만 모여도 열린다", "스크랩한 말의 기호에 스티커 한 장", $"확정 팔로워 +{Balance.ConfirmFollowers * 2}");
+            TraitRow(Trait.Mimic, "의태", $"외출 피로 {Balance.FatOut} → {Balance.FatOutMimic}", "셧다운 때 의심 절반", "입력 흔들림 절반", "위험 구간 게시물 의심 없음", "100 판정 각성 +10%");
+            TraitRow(Trait.Empathy, "공감", "팬 글에 감정 색", "섬뜩해도 의심 그대로", "단골 친밀도 성공 한 번 덜", "정상인 답장 의심 절반", "오답에도 팔로워가 줄지 않는다");
             // 장소 능력 (Persona 5의 협력자 랭크)
             var got = GameData.Places.SelectMany(p => new[] { 2, 3 }.Where(lv => S.HasAbility(p.Id, lv)).Select(lv => $"{p.Icon} {Abilities[(p.Id, lv)]}")).ToList();
             if (got.Count > 0)
@@ -1937,27 +1937,26 @@ namespace Kaomoji
             }
         }
 
-        void TraitRow(Trait t, string name, string l1, string l2)
+        void TraitRow(Trait t, string name, params string[] lines)
         {
             int lv = S.Traits[t];
             GUILayout.BeginVertical(card);
             GUILayout.BeginHorizontal();
             GUILayout.Label(name, big, GUILayout.ExpandWidth(false));
-            GUILayout.Label($"{new string('●', lv)}{new string('○', 2 - lv)}", new GUIStyle(dotStyle) { fontSize = 18 }, GUILayout.Height(28));
+            GUILayout.Label($"{new string('●', lv)}{new string('○', Balance.TraitMax - lv)}", new GUIStyle(dotStyle) { fontSize = 18 }, GUILayout.Height(28));
             GUILayout.FlexibleSpace();
             Btn("↑", () => S.Raise(t), S.CanRaise(t), null, GUILayout.Width(56));
             Mark($"trait_{(int)t}");
             GUILayout.EndHorizontal();
-            TraitLine(lv >= 1, "Lv1", l1);
-            TraitLine(lv >= 2, "Lv2", l2);
+            for (int k = 0; k < lines.Length; k++) TraitLine(lv > k, $"Lv{k + 1}", lines[k]);
             GUILayout.EndVertical();
         }
 
         void TraitLine(bool on, string lv, string text)
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Label(on ? "●" : "○", dotStyle, GUILayout.Width(20), GUILayout.Height(22));
-            GUILayout.Label($"{lv}  {text}", small, GUILayout.Height(22));
+            GUILayout.Label(on ? "●" : "○", dotStyle, GUILayout.Width(20), GUILayout.Height(18));
+            GUILayout.Label($"{lv}  {text}", small, GUILayout.Height(18));
             GUILayout.EndHorizontal();
         }
 

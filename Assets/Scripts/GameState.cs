@@ -180,10 +180,10 @@ namespace Kaomoji
 
         // 각성 확률: 기본 20% + 위험 구간 완벽 답장마다 5%(최대 20%) + 공원 3단계 + 잠 다짐
         public double AwakenChance => AwakenChanceOverride ?? Balance.AwakenChance + Math.Min(dangerPerfects, 4) * 0.05
-            + (HasAbility("park", 3) ? Balance.AwakenPark : 0) + (sleptPledge ? Balance.AwakenSlept : 0);
+            + (HasAbility("park", 3) ? Balance.AwakenPark : 0) + (sleptPledge ? Balance.AwakenSlept : 0) + (Traits[Trait.Mimic] >= 5 ? 0.1 : 0); // 의태 5: +10%
 
         // 입력 흔들림: 위험 구간에서 파츠를 고를 때마다 굴린다. 편의점 3단계면 확률 절반
-        public double WobbleChance => Balance.InputWobble * (HasAbility("store", 3) ? 0.5 : 1);
+        public double WobbleChance => Balance.InputWobble * (HasAbility("store", 3) ? 0.5 : 1) * (Traits[Trait.Mimic] >= 3 ? 0.5 : 1); // 의태 3도 절반
         public bool RollWobble() => InDanger && DayRoll(100 + wobbleRolls++) < WobbleChance;
 
         // 행동을 마쳐도 결과 창을 닫을 때(EndAction)까지 시간은 흐르지 않는다
@@ -439,8 +439,9 @@ namespace Kaomoji
         int Unconfirmed => Sym.Count - Confirmed.Count;
 
         // 검증 대기가 셋 모이면(남은 기호가 셋 미만이면 하나·둘로도) 그림 페이지가 열린다
-        public bool CanOpenPage => Day >= PageLockedUntil && (PendingSymbols.Count >= 3 || (PendingSymbols.Count > 0 && Unconfirmed < 3));
-        public List<string> PageSymbols => PendingSymbols.Take(3).ToList();
+        int PageSize => Traits[Trait.Decode] >= 3 ? 2 : 3; // 해독 3: 둘만 모여도 그림 페이지
+        public bool CanOpenPage => Day >= PageLockedUntil && (PendingSymbols.Count >= PageSize || (PendingSymbols.Count > 0 && Unconfirmed < PageSize));
+        public List<string> PageSymbols => PendingSymbols.Take(PageSize).ToList();
 
         // 짝이 다 맞아야 한꺼번에 확정. 틀리면 어느 것이 틀렸는지 알려 주지 않고 다음 날 밤까지 잠긴다 (카페 3단계면 하나 표시)
         public (bool ok, string wrong) TryConfirm(Dictionary<string, Emo> guess)
@@ -451,7 +452,7 @@ namespace Kaomoji
             if (wrong == null)
             {
                 foreach (var s in page) { Confirmed.Add(s); Pencil.Remove(s); }
-                Followers += Balance.ConfirmFollowers;
+                Followers += Balance.ConfirmFollowers * (Traits[Trait.Decode] >= 5 ? 2 : 1); // 해독 5: 확정 팔로워 두 배
                 return (true, null);
             }
             PageLockedUntil = Day + 1;
@@ -464,7 +465,15 @@ namespace Kaomoji
             if (e == null) Pencil.Remove(sym); else Pencil[sym] = e.Value;
         }
 
-        public void Scrap(string text) { if (!Scraps.Contains(text)) Scraps.Add(text); }
+        public void Scrap(string text)
+        {
+            if (Scraps.Contains(text)) return;
+            Scraps.Add(text);
+            // 해독 4: 스크랩한 말 속 못 푼 기호에 스티커 한 장씩
+            if (Traits[Trait.Decode] >= 4)
+                foreach (var t in text.Split(' ').Where(t => Sym.ContainsKey(t) && !Confirmed.Contains(t)).Distinct())
+                    Stickers[t] = Stickers.GetValueOrDefault(t) + 1;
+        }
 
         // ---------- 단골 친밀도 ----------
 
@@ -481,7 +490,7 @@ namespace Kaomoji
             {
                 if (lv >= 3) return;
                 IntimacyWins[author] = IntimacyWins.GetValueOrDefault(author) + 1;
-                if (IntimacyWins[author] >= Balance.IntimacyNeed[lv]) { Intimacy[author] = lv + 1; IntimacyWins[author] = 0; }
+                if (IntimacyWins[author] >= Math.Max(1, Balance.IntimacyNeed[lv] - (Traits[Trait.Empathy] >= 3 ? 1 : 0))) // 공감 3: 한 번 덜 { Intimacy[author] = lv + 1; IntimacyWins[author] = 0; }
                 return;
             }
             // 서운함: 다음 밤 그 단골의 단서가 하나 닫히고 입은 따끔·쿨만
@@ -524,7 +533,7 @@ namespace Kaomoji
             }
             if (f > 0 && IntimacyOf(Starlover) >= 3) f *= 1.2f; // 별빛러버 친밀도 3: 좋아요 +20%
             if (decor != null) f += Balance.DecorBonus * (Is(NoticeKind.DecorBoom) ? 2 : 1);
-            if (InDanger) s += Balance.DangerPostSus;
+            if (InDanger && Traits[Trait.Mimic] < 4) s += Balance.DangerPostSus; // 의태 4: 위험 구간 게시물 의심 없음
             if (Is(NoticeKind.StarBan) && (eye == Emo.Joy || mouth == Emo.Joy)) s += 5;
             Followers = Math.Max(0, Followers + (int)f);
             AddSus(s);
@@ -552,6 +561,7 @@ namespace Kaomoji
             float f = bf, s = bs;
             if (post.WantsCreepy && r == Result.Perfect) s = 0;
             if (r == Result.Creepy && Traits[Trait.Empathy] >= 2) s = 0;
+            if (r == Result.Wrong && Traits[Trait.Empathy] >= 5) f = Math.Max(0, f); // 공감 5: 오답에도 팔로워가 줄지 않는다
             if (f > 0)
             {
                 if (Is(NoticeKind.HeartDay) && answers.Any(a => a.Eye == Emo.Shy || a.Mouth == Emo.Shy)) f *= 1.5f;
@@ -570,7 +580,8 @@ namespace Kaomoji
         {
             var post = Tonight[idx];
             var (r, f, s) = Score(post, post.Answers, eye, mouth, glitched);
-            if (post.Holdout) s += IntimacyOf(Doubter) >= 3 ? Balance.HoldoutSus / 2 : Balance.HoldoutSus; // 의심하는자 친밀도 3이면 절반 // 아직 글자를 쓰는 정상인에게 답하면 의심이 크게 더 오른다
+            // 아직 글자를 쓰는 정상인에게 답하면 의심이 크게 더 오른다. 의심하는자 친밀도 3, 공감 4가 각각 절반
+            if (post.Holdout) s += Balance.HoldoutSus * (IntimacyOf(Doubter) >= 3 ? 0.5f : 1) * (Traits[Trait.Empathy] >= 4 ? 0.5f : 1);
             if (post.Author == Doubter)
             {
                 if (r == Result.Wrong) s = Balance.DoubterWrongSus;
@@ -650,7 +661,7 @@ namespace Kaomoji
                 }
         }
 
-        public bool CanRaise(Trait t) => Points > 0 && Traits[t] < 2;
+        public bool CanRaise(Trait t) => Points > 0 && Traits[t] < Balance.TraitMax;
         public void Raise(Trait t) { if (!CanRaise(t)) return; Points--; Traits[t]++; }
 
         // 답장을 끝내면 특성 창이 열리기 전에 포인트를 준다. 두 번 불러도 한 번만.

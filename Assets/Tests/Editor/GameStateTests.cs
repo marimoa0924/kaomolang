@@ -452,5 +452,31 @@ namespace Kaomoji.Tests
             Assert.IsNull(c.Replies[0]);
             Assert.AreEqual(1, c.Mouths.Count);
         }
+
+        [Test]
+        public void TraitsHaveFiveLevelsForFifteenDays()
+        {
+            var s = new GameState(1) { Points = 99 };
+            for (int k = 0; k < 7; k++) s.Raise(Trait.Mimic);
+            Assert.AreEqual(Balance.TraitMax, s.Traits[Trait.Mimic]); // 5에서 멈춘다
+            Assert.AreEqual(Balance.InputWobble / 2, s.WobbleChance, 1e-9);
+            Assert.AreEqual(Balance.AwakenChance + 0.1, s.AwakenChance, 1e-9);
+            Assert.GreaterOrEqual(3 * Balance.TraitMax, Balance.Days); // 15일치 포인트가 남지 않는다
+
+            var d = new GameState(1) { Points = 99 };
+            for (int k = 0; k < 4; k++) d.Raise(Trait.Decode);
+            var two = GameData.Sym.Keys.Where(k => !GameData.SecondSet.Contains(k)).Take(2).ToList();
+            foreach (var k in two) d.Stickers[k] = 1;   // 해독 2: 한 장이면 검증 대기
+            Assert.IsTrue(d.CanOpenPage);                // 해독 3: 둘이면 페이지
+            var sym = GameData.Sym.Keys.First(k => !two.Contains(k));
+            d.Scrap($"■ {sym} ■");                       // 해독 4: 스크랩에 스티커
+            Assert.AreEqual(1, d.Stickers[sym]);
+
+            var e = new GameState(1) { Points = 99 };
+            for (int k = 0; k < 5; k++) e.Raise(Trait.Empathy);
+            int f0 = e.Followers;
+            e.DoReply(1, Wrong(e.Tonight[1].Answers), Emo.Neutral);
+            Assert.GreaterOrEqual(e.Followers, f0);      // 공감 5: 오답에도 줄지 않는다
+        }
     }
 }
