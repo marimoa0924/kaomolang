@@ -13,7 +13,8 @@ TrueTypeFontImporter:
   - Malgun Gothic
   - Apple SD Gothic Neo
   - Noto Sans CJK KR
-  fallbackFontReferences: []
+  fallbackFontReferences:
+  - {fileID: 12800000, guid: a51ef85632df48ae85d14e704bb5d906, type: 3}
   customCharacters: 
   fontRenderingMode: 2
   ascentCalculationMode: 1

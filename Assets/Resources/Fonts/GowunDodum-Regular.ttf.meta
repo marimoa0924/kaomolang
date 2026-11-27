@@ -15,6 +15,7 @@ TrueTypeFontImporter:
   - Noto Sans CJK KR
   fallbackFontReferences:
   - {fileID: 12800000, guid: a02663d8e02141a2a1118b0e8837f8bc, type: 3}
+  - {fileID: 12800000, guid: a51ef85632df48ae85d14e704bb5d906, type: 3}
   customCharacters: 
   fontRenderingMode: 2
   ascentCalculationMode: 1

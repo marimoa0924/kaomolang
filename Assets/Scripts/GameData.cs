@@ -1,5 +1,5 @@
 using System;
-// 카오모지 게임 프로토타입 데이터 (스펙 v2). Unity에 의존하지 않는 순수 C#.
+// 카오모지 게임 프로토타입 데이터 (스펙 v5). Unity에 의존하지 않는 순수 C#.
 // 수치는 모두 가안. Balance에서 조정한다.
 using System.Collections.Generic;
 using System.Linq;
@@ -7,56 +7,49 @@ using System.Linq;
 namespace Kaomoji
 {
     public enum Emo { Joy, Sad, Anger, Surprise, Shy, Neutral }
-    public enum Result { Perfect, Success, Creepy, Meh, Wrong } // 앞일수록 좋은 판정
+    public enum Result { Perfect, Success, Creepy, Near, Wrong } // 앞일수록 좋은 판정. Near: 분위기는 맞은 아쉬운 오답
     public enum Ending { None, Found, Collapse, Conquer, Absorb, Forgotten }
-    public enum Trait { Decode, Mimic, Empathy }
     public enum Slot { Morning, Afternoon, Night }
     public enum EvKind { Npc, Passerby, Special }
-    public enum Hint { Full, Partial, None }
-    public enum Pledge { Hint, Sleep, Review } // 그림 일기에서 고르는 내일의 다짐
-    public enum Recovery { Sleep, TrueForm, HomeCall, Snack } // 잠들기 전 회복 선택
-    public enum NoticeKind { HeartDay, StarBan, NeutralWeek, NoPhoto, DoubleFace, SameEyeMouth, QuietNight, HoldoutCampaign, DecorBoom, StayIn, FaceShortage, AllNighter, HoldoutSilence, MimicDay, Final } // 색 단서가 얼마나 보이는지. 모호한 글은 일부만, 또는 안 보인다
+    public enum Rest { Full, Feed, Practice } // 집 휴식 셋: 고민할 건 숫자뿐
+    public enum NoticeKind { HeartDay, StarBan, NeutralWeek, NoPhoto, DoubleFace, SameEyeMouth, QuietNight, HoldoutCampaign, DecorBoom, StayIn, FaceShortage, AllNighter, HoldoutSilence, MimicDay, Final }
 
     public static class Balance
     {
         public const int Days = 15; // v4: 세 막 (1~5 적응, 6~10 확산, 11~15 정복). 정식판은 30일
         public static int Act(int day) => day <= 5 ? 1 : day <= 10 ? 2 : 3;
-        public const int SecondSetDay = 6, DecorComboDay = 8; // 두 번째 기호 세트, 장식 조합 해금
         public const int PostsPerNight = 3;
         public const float UneasyFrom = 0.5f; // 팔로워가 목표의 이만큼이면 '이상하다'는 글이 섞이기 시작
-        public const int FollowerGoal = 12000; // v4 15일 기준 가안. 세계 변화 %는 목표 대비라 그대로 따라온다
-        // 쉬지 않으면 하루 약 +30 (외출 2번 30 + 답장 3개 12 - 잠 12): 나흘째쯤 멘탈붕괴. 휴식을 두세 번은 골라야 한다
-        public const float FatOut = 15, FatOutMimic = 8, FatReply = 4, FatSleep = -12, FatHome = -5, FatNap = -30;
-        public const float NapSus = -10, DayFailSus = 8;
-        public const float SusDecay = 2; // 의심이 한 번도 오르지 않은 날 밤에 내려간다
-        // 의태 피로 구간: 40 새어남(지친 사진), 70 위험(지친 사진 확대, 게시물 의심 +3, 입력 흔들림), 100 판정
-        public const float LeakFrom = 40, DangerFrom = 70, DangerPostSus = 3, InputWobble = 0.2f;
-        public const float TiredSad = 1.2f, TiredSadDanger = 1.5f, TiredJoy = 0.8f;
-        public const double AwakenChance = 0.2, AwakenPark = 0.1, AwakenSlept = 0.05; // 100 판정: 각성 확률
-        public const float AwakenFat = 70;
-        // 정산 회복 선택 (잠 -12를 대신한다)
-        public const float RestSleep = -12, RestTrue = -25, RestTrueSus = 5, RestCall = -8, RestSnack = -15, SnackOutingFat = 3;
-        public const int ConfirmFollowers = 150; // 그림 페이지 묶음 확정
-        public static readonly int[] AffNeed = { 1, 2, 3 };
-        public const int TraitMax = 5; // 특성 3개 × 5단계 = 15칸: 15일 동안 다 채울 수 없어 고르게 된다      // 장소 호감 0→1, 1→2, 2→3에 필요한 성공 수
-        public static readonly int[] IntimacyNeed = { 2, 3, 4 }; // 단골 친밀도
+        public const int FollowerGoal = 12000;
+        // 1~2일차 외출 두 번씩이면 둘째 날 밤 70을 처음 넘는다 (외출 15×4 + 답장 4×3, 잠 -12)
+        public const float FatOut = 15, FatOutSkilled = 10, FatReply = 4, FatSleep = -12, DayFailSus = 8;
+        public const float SusDecay = 2;          // 의심이 한 번도 오르지 않은 날 밤에 내려간다
+        public const float NoiseFrom = 70;        // 피로가 이걸 넘으면 노이즈와 메시지 (사흘에 한 번까지)
+        public const int NoiseGap = 3;
+        // 휴식 셋 (피로, 다른 효과)
+        public const float RestFull = -30, RestFullSus = -10, RestFeed = -15, RestPractice = -15, RestGrowth = 5;
+        public const int FeedFollowers = 150, PracticeDays = 3;
+        // 선형 성장: 이날부터 자동으로 열린다
+        public const int GrowOuting = 3, GrowLetters = 6, GrowRest = 9, GrowNear = 12;
+        public static readonly int[] AffNeed = { 1, 2, 3 };       // 장소 호감 0→1, 1→2, 2→3에 필요한 성공 수
+        public static readonly int[] IntimacyNeed = { 2, 3, 4 }; // 단골 친밀도 (미룸)
         public const float BreakdownSus = 30, BreakdownFat = -50, FatMaxAfterBreakdown = 120;
         public const float DoubterWrongSus = 15, DoubterPerfectSus = -10;
         public const float HoldoutSus = 18; // 정상인(이상하게 여기는 사람)에게 답하면
         public const int RoomUpload = 50, DecorBonus = 400;
-        public const int ConquerSusMax = 70, AbsorbSolved = 12;
+        public const int ConquerSusMax = 70, AbsorbPerfect = 20; // 물듦: 완벽 답장이 이만큼 쌓였는데 팔로워는 못 채움
         public const double ExtraEventChance = 0.3; // 외출 때 행인·특수 이벤트가 고정 NPC 대신 나올 확률
 
         // (팔로워, 의심도)
         public static (int f, float s) Reply(Result r) => r switch
         {
             Result.Perfect => (300, 0), Result.Success => (180, 0), Result.Creepy => (400, 10),
-            Result.Meh => (0, 0), _ => (-120, 10),
+            Result.Near => (-40, 0), _ => (-120, 10),
         };
         public static (int f, float s) Upload(Result r) => r switch
         {
             Result.Perfect => (200, 0), Result.Success => (120, 0), Result.Creepy => (250, 10),
-            Result.Meh => (30, 0), _ => (-60, 5),
+            Result.Near => (-20, 0), _ => (-60, 5),
         };
     }
 
@@ -105,8 +98,7 @@ namespace Kaomoji
     {
         public string Id, Author, Text;
         public string Plain; // 실제로 하는 말. 팔로워가 늘수록 주인공이 조금씩 읽게 된다
-        public string[] Clues; // [0] 기본, [1] 해독 1레벨부터
-        public Hint Hint;
+        public string[] Clues; // [0] 사진 단서만 보인다
         public Answer[] Answers;
         public bool WantsCreepy;
         public bool Holdout; // 다들 카오모지로만 말하는 걸 이상하게 여기는 사람: 끝까지 글자로 쓴다
@@ -121,16 +113,16 @@ namespace Kaomoji
     // 해금 표 한 줄: 몇 일차에 열리는지, 켜져 있는지, 열리는 날 코치가 짚어 줄 한 줄
     public readonly struct Unlock
     {
-        public readonly int Day; public readonly bool On; public readonly string Tip;
-        public Unlock(int day, bool on, string tip) { Day = day; On = on; Tip = tip; }
+        public readonly int Day; public readonly bool On;
+        public Unlock(int day, bool on) { Day = day; On = on; }
     }
 
     public static class GameData
     {
-        // 기본은 전부 1일에 켜짐: 규칙 테스트가 학습 지도에 묶이지 않게. 게임은 Unlocks.csv를 읽어 덮어써
-        public static Dictionary<Feature, Unlock> UnlockTable = Enum.GetValues(typeof(Feature)).Cast<Feature>().ToDictionary(f => f, f => new Unlock(1, true, ""));
+        // 기본: v5 시스템은 1일부터, 미룬 것은 꺼짐. 게임은 Unlocks.csv로 날짜를 덮어쓴다
+        public static Dictionary<Feature, Unlock> UnlockTable = Enum.GetValues(typeof(Feature)).Cast<Feature>().ToDictionary(f => f, f => new Unlock(1, f <= Feature.Misuse));
 
-        // CSV 형식: 시스템,열리는 날,켜짐(1/0),안내 한 줄. #으로 시작하는 줄과 모르는 이름은 건너뛰어
+        // CSV 형식: 시스템,열리는 날,켜짐(1/0). #으로 시작하는 줄과 모르는 이름은 건너뛴다
         public static Dictionary<Feature, Unlock> ParseUnlocks(string csv)
         {
             var table = new Dictionary<Feature, Unlock>(UnlockTable); // 표에 없는 시스템은 기본값 그대로
@@ -138,9 +130,9 @@ namespace Kaomoji
             {
                 var line = raw.Trim();
                 if (line.Length == 0 || line.StartsWith("#")) continue;
-                var f = line.Split(new[] { ',' }, 4); // 안내 문구엔 쉼표가 들어갈 수 있어서 넷으로만 자른다
+                var f = line.Split(',');
                 if (f.Length < 3 || !Enum.TryParse(f[0].Trim(), out Feature key) || !int.TryParse(f[1].Trim(), out var day)) continue;
-                table[key] = new Unlock(day, f[2].Trim() == "1", f.Length > 3 ? f[3].Trim() : "");
+                table[key] = new Unlock(day, f[2].Trim() == "1");
             }
             return table;
         }
@@ -164,7 +156,7 @@ namespace Kaomoji
 
         public static string ResultName(Result r) => r switch
         {
-            Result.Perfect => "완벽", Result.Success => "성공", Result.Creepy => "섬뜩", Result.Meh => "시큰둥", _ => "오답",
+            Result.Perfect => "완벽", Result.Success => "성공", Result.Creepy => "섬뜩", Result.Near => "아쉬움", _ => "오답",
         };
 
         public static Answer Pure(Emo e) => new(e, e, E[e].Name);
@@ -189,28 +181,48 @@ namespace Kaomoji
         public static Answer Syn(string name) => Synergies.First(s => s.Name == name);
         public static Answer SynergyOf(Emo eye, Emo mouth) => Synergies.FirstOrDefault(s => s.Eye == eye && s.Mouth == mouth);
 
-        // 감정 기호 사전: 감정마다 4개. 폰트에 없는 † ∮ 대신 † ∮
-        public static readonly Dictionary<string, Emo> Sym = new()
-        {
-            ["☆"] = Emo.Joy, ["♪"] = Emo.Joy, ["✿"] = Emo.Joy, ["◎"] = Emo.Joy,
-            ["☂"] = Emo.Sad, ["◇"] = Emo.Sad, ["∴"] = Emo.Sad, ["≈"] = Emo.Sad,
-            ["※"] = Emo.Anger, ["▲"] = Emo.Anger, ["♯"] = Emo.Anger, ["†"] = Emo.Anger,
-            ["◉"] = Emo.Surprise, ["⁂"] = Emo.Surprise, ["∮"] = Emo.Surprise, ["⊙"] = Emo.Surprise,
-            ["♡"] = Emo.Shy, ["∽"] = Emo.Shy, ["◐"] = Emo.Shy, ["❀"] = Emo.Shy,
-            // 두 번째 세트: 6일차부터 섞인다
-            ["∩"] = Emo.Joy, ["♭"] = Emo.Joy, ["∵"] = Emo.Sad, ["∫"] = Emo.Sad, ["⊥"] = Emo.Anger, ["≡"] = Emo.Anger,
-            ["∇"] = Emo.Surprise, ["∂"] = Emo.Surprise, ["∝"] = Emo.Shy, ["∋"] = Emo.Shy,
-        };
-        public static readonly HashSet<string> SecondSet = new() { "∩", "♭", "∵", "∫", "⊥", "≡", "∇", "∂", "∝", "∋" };
+        // 분위기 묶음: 같은 묶음 감정으로 틀리면 아쉬운 오답. 들뜸 반짝·간질, 가라앉음 축축·따끔, 멍함 쿨·민짜
+        public static int MoodOf(Emo e) => e switch { Emo.Joy or Emo.Shy => 0, Emo.Sad or Emo.Anger => 1, _ => 2 };
 
-        // 그림 페이지: 감각 이름 대신 장면으로 짝짓는다
-        public static readonly Dictionary<Emo, string> Scenes = new()
+        // 팬 글의 진짜 이모지 (뜻 그대로). 폰트는 흑백 Noto Emoji
+        public static readonly Dictionary<Emo, string[]> Emojis = new()
         {
-            [Emo.Joy] = "촛불 꽂힌 케이크", [Emo.Sad] = "빗속에 놓인 우산", [Emo.Anger] = "밟힌 발가락",
-            [Emo.Surprise] = "번개 맞은 나무", [Emo.Shy] = "빨개진 볼과 편지",
+            [Emo.Joy] = new[] { "✨", "😆", "🎉" }, [Emo.Sad] = new[] { "😭", "💧", "😢" }, [Emo.Anger] = new[] { "💢", "😡", "🔥" },
+            [Emo.Surprise] = new[] { "😱", "❗", "😳" }, [Emo.Shy] = new[] { "🥺", "💕", "☺" }, [Emo.Neutral] = new[] { "😐" },
         };
 
-        public static readonly Decor Tentacle = new("tentacle", "촉수", "~(", ")~"); // 피로 위험 구간에서 한 번 해금
+        // 감탄사·의성어는 글자 대신 이모지로
+        static readonly (string re, string emoji)[] Interjections = { ("ㅋ+", "😂"), ("ㅎ+", "☺"), ("[ㅠㅜ]+", "😭"), ("헉", "😱"), ("엉엉", "😭"), ("흑흑", "😢"), ("히히", "☺") };
+
+        // 실제 문장 → 팬 글: 감탄사를 이모지로 바꾸고 정답 감정 이모지를 가운데와 끝에 하나씩. 한글은 화면에서 가린다
+        public static string Emojify(string plain, IEnumerable<Answer> answers, int seed, bool ironic = false)
+        {
+            foreach (var (re, emoji) in Interjections) plain = System.Text.RegularExpressions.Regex.Replace(plain, re, emoji);
+            var emos = answers.SelectMany(a => new[] { a.Eye, a.Mouth }).Distinct().ToList();
+            string Pick(int k)
+            {
+                var e = emos[k % emos.Count];
+                return ironic && MoodOf(e) == 1 ? "😂" : Emojis[e][(seed + k) % Emojis[e].Length]; // 2막의 반어: 가라앉은 글에 웃는 이모지
+            }
+            var words = plain.Split(' ').ToList();
+            words.Insert(Math.Max(1, words.Count / 2), Pick(0));
+            words.Add(Pick(1));
+            return string.Join(" ", words);
+        }
+
+        // 선형 성장이 열리는 날 그림 일기에 찍히는 도장 (글씨 없이 그림으로)
+        public static readonly Dictionary<int, string> Growth = new()
+        {
+            [Balance.GrowOuting] = "→ ~↓", [Balance.GrowLetters] = "■ → 가", [Balance.GrowRest] = "zZ ~↓↓", [Balance.GrowNear] = "… ♥",
+        };
+
+        // 피로가 70을 넘을 때 뜨는 메시지: 매번 다음 것
+        public static readonly string[] NoiseMessages =
+        {
+            "의태 드라이버가 과열되었습니다.", "얼굴이 흐르고 있습니다. (^▽T)", "피부.exe 가 응답하지 않습니다.",
+            "ㅇ ㅏ ㄴ ㄴ ㅕ ㅇ 하 세 요", "촉수를 숨기시겠습니까?", "표정 모듈 온도: 위험", "사람 모양을 다시 불러오는 중…",
+        };
+
 
         // 장소 호감 단계 능력 (Persona 5의 협력자 랭크)
         public static readonly Dictionary<(string place, int lv), string> Abilities = new()
@@ -232,7 +244,7 @@ namespace Kaomoji
         {
             new() { Kind = NoticeKind.HeartDay, Title = "♥의 날", Rule = "간질이 정답인 글과 게시물의 팔로워 ×1.5", MinAct = 1 },
             new() { Kind = NoticeKind.StarBan, Title = "★ 자제령", Rule = "반짝 눈·입을 쓸 때마다 의심 +5", MinAct = 1 },
-            new() { Kind = NoticeKind.NeutralWeek, Title = "민짜 주간", Rule = "시큰둥 판정이 성공으로 올라간다", MinAct = 1 },
+            new() { Kind = NoticeKind.NeutralWeek, Title = "민짜 주간", Rule = "아쉬운 오답이 성공으로 올라간다", MinAct = 1 },
             new() { Kind = NoticeKind.SameEyeMouth, Title = "똑같은 눈입", Rule = "눈과 입이 같은 감정인 답장에 팔로워 +10%", MinAct = 1 },
             new() { Kind = NoticeKind.QuietNight, Title = "조용한 밤", Rule = "멘션이 둘로 줄고 피로 −5", MinAct = 1 },
             new() { Kind = NoticeKind.StayIn, Title = "외출 자제", Rule = "외출 피로 +5, 대신 거리 말풍선의 해독 단서가 둘", MinAct = 1 },
@@ -382,8 +394,8 @@ namespace Kaomoji
 
         public static Place PlaceById(string id) => Places.First(p => p.Id == id);
 
-        static Post P(string author, string text, string c0, string c1, Hint hint, params Answer[] ans) =>
-            new() { Author = author, Text = text, Clues = new[] { c0, c1 }, Hint = hint, Answers = ans };
+        static Post P(string author, string c0, string c1, params Answer[] ans) =>
+            new() { Author = author, Clues = new[] { c0, c1 }, Answers = ans };
 
         static Post Creepy(Post p) { p.WantsCreepy = true; return p; }
         static Post Or(Post p, Post bad) { p.Bad = bad; return p; }
@@ -392,43 +404,43 @@ namespace Kaomoji
         // 별빛러버 1·4·7·10·13일, 우울한고양이 1·3·6·9·12일, 의심하는자 2·5·8·11·14일
         public static readonly Post[][] Posts =
         {
-            new[] { P(Starlover, "■■ ☆ ■■■ !!!", "[사진] 케이크", "[시각] 오후 3시", Hint.Full, Pure(Emo.Joy)),
-                    P(Gloomcat, "■■■ ☂ ■■ ...", "[사진] 비 오는 창문", "[시각] 새벽 3시", Hint.Full, Pure(Emo.Sad)),
-                    P(null, "♪ ■■■■ ✿ ■", "[사진] 꼬리 흔드는 강아지", "[반응] 웃음×20", Hint.Full, Pure(Emo.Joy)) },
-            new[] { P(Doubter, "■■ ※ ■■■■ ?", "[반응] 화남×8", "[시각] 밤 11시 50분", Hint.Full, Pure(Emo.Anger)) },
-            new[] { Or(P(Gloomcat, "■ ◎ ■■ ☂ ■", "[사진] 따뜻한 코코아", "[반응] 미소×3", Hint.Partial, Syn("괜찮은 척"), Pure(Emo.Sad)),
-                       P(Gloomcat, "◇ ■■■ ☂ ■■", "[사진] 텅 빈 의자", "[시각] 새벽 2시", Hint.Full, Pure(Emo.Sad))) },
-            new[] { P(Starlover, "◉ ■■ ♪ ?!?!", "[사진] 네 사진만 모은 폴더", "[반응] 헉×14", Hint.Partial, Pure(Emo.Surprise), Pure(Emo.Joy)) },
-            new[] { P(Doubter, "■ ⁂ ■■ ※ ■?", "[사진] 확대한 네 눈", "[반응] 의심×12", Hint.None, Pure(Emo.Surprise), Pure(Emo.Anger)) },
-            new[] { Or(P(Gloomcat, "■■ ♪ ■ ∴ ~", "[사진] 다시 켠 화분 조명", "[시각] 오전 9시", Hint.Partial, Pure(Emo.Joy), Syn("괜찮은 척")),
-                       P(Gloomcat, "∴ ■■ ≈ ■■■", "[사진] 시든 꽃", "[시각] 새벽 4시", Hint.Full, Pure(Emo.Sad))) },
-            new[] { Creepy(P(Starlover, "◉ ■■ ✿ ■■ !!!", "[사진] 네 사진으로 도배된 방", "[반응] 소름×40", Hint.Partial, Syn("집착"))) },
-            new[] { Or(P(Doubter, "∮ ■■■ ⊙ ?", "[사진] 정전된 거리", "[반응] 헉×20", Hint.Full, Pure(Emo.Surprise)),
-                       P(Doubter, "※ ∮ ■■ † !!", "[반응] 신고×5", "[시각] 자정", Hint.None, Pure(Emo.Anger))) },
-            new[] { Or(P(Gloomcat, "■ ◐ ■■ ✿ ..", "[사진] 무릎 위 고양이", "[반응] 간질×6", Hint.Partial, Pure(Emo.Shy), Pure(Emo.Joy)),
-                       P(Gloomcat, "≈ ■■■ ◇ ■", "[사진] 이삿짐 상자", "[시각] 새벽 1시", Hint.Full, Pure(Emo.Sad))) },
-            new[] { Creepy(P(Starlover, "⊙ ■ ◎ ■■ ⊙ ■■■", "[사진] 네 얼굴을 오린 가면", "[시각] 새벽 4시 44분", Hint.None, Syn("집착"))) },
-            new[] { Or(P(Doubter, "■ † ■■ ⁂ ?!?", "[사진] 하늘의 이상한 빛", "[반응] 외계인×99", Hint.Partial, Pure(Emo.Surprise)),
-                       P(Doubter, "† ※ ■■ † !!!", "[반응] 박제×50", "[시각] 새벽 5시", Hint.None, Pure(Emo.Anger))) },
-            new[] { Or(P(Gloomcat, "■■ ♪ ■ ■■ ∴ ■!", "[사진] 동네 공원 벤치", "[시각] 오후 1시", Hint.Partial, Pure(Emo.Joy), Syn("괜찮은 척")),
-                       P(Gloomcat, "≈ ■■ ■■ ☂ …", "[사진] 닫힌 커튼", "[시각] 새벽 3시", Hint.Full, Pure(Emo.Sad))) },
-            new[] { P(Starlover, "♡ ■■■ ■ ◉ ■■ ..!", "[사진] 1년 전 첫 댓글 캡처", "[반응] 두근×31", Hint.Partial, Pure(Emo.Shy), Syn("두근")) },
-            new[] { Or(P(Doubter, "♯ ■■ ■■■ ∽ ■", "[사진] 관찰 기록으로 가득한 메모장", "[시각] 밤 12시", Hint.None, Syn("삐짐"), Pure(Emo.Anger)),
-                       P(Doubter, "† ■■ ■■ ※ !!!", "[반응] 박제×80", "[시각] 새벽 5시", Hint.None, Pure(Emo.Anger))) },
+            new[] { P(Starlover, "[사진] 케이크", "[시각] 오후 3시", Pure(Emo.Joy)),
+                    P(Gloomcat, "[사진] 비 오는 창문", "[시각] 새벽 3시", Pure(Emo.Sad)),
+                    P(null, "[사진] 꼬리 흔드는 강아지", "[반응] 웃음×20", Pure(Emo.Joy)) },
+            new[] { P(Doubter, "[반응] 화남×8", "[시각] 밤 11시 50분", Pure(Emo.Anger)) },
+            new[] { Or(P(Gloomcat, "[사진] 따뜻한 코코아", "[반응] 미소×3", Syn("괜찮은 척"), Pure(Emo.Sad)),
+                       P(Gloomcat, "[사진] 텅 빈 의자", "[시각] 새벽 2시", Pure(Emo.Sad))) },
+            new[] { P(Starlover, "[사진] 네 사진만 모은 폴더", "[반응] 헉×14", Pure(Emo.Surprise), Pure(Emo.Joy)) },
+            new[] { P(Doubter, "[사진] 확대한 네 눈", "[반응] 의심×12", Pure(Emo.Surprise), Pure(Emo.Anger)) },
+            new[] { Or(P(Gloomcat, "[사진] 다시 켠 화분 조명", "[시각] 오전 9시", Pure(Emo.Joy), Syn("괜찮은 척")),
+                       P(Gloomcat, "[사진] 시든 꽃", "[시각] 새벽 4시", Pure(Emo.Sad))) },
+            new[] { Creepy(P(Starlover, "[사진] 네 사진으로 도배된 방", "[반응] 소름×40", Syn("집착"))) },
+            new[] { Or(P(Doubter, "[사진] 정전된 거리", "[반응] 헉×20", Pure(Emo.Surprise)),
+                       P(Doubter, "[반응] 신고×5", "[시각] 자정", Pure(Emo.Anger))) },
+            new[] { Or(P(Gloomcat, "[사진] 무릎 위 고양이", "[반응] 간질×6", Pure(Emo.Shy), Pure(Emo.Joy)),
+                       P(Gloomcat, "[사진] 이삿짐 상자", "[시각] 새벽 1시", Pure(Emo.Sad))) },
+            new[] { Creepy(P(Starlover, "[사진] 네 얼굴을 오린 가면", "[시각] 새벽 4시 44분", Syn("집착"))) },
+            new[] { Or(P(Doubter, "[사진] 하늘의 이상한 빛", "[반응] 외계인×99", Pure(Emo.Surprise)),
+                       P(Doubter, "[반응] 박제×50", "[시각] 새벽 5시", Pure(Emo.Anger))) },
+            new[] { Or(P(Gloomcat, "[사진] 동네 공원 벤치", "[시각] 오후 1시", Pure(Emo.Joy), Syn("괜찮은 척")),
+                       P(Gloomcat, "[사진] 닫힌 커튼", "[시각] 새벽 3시", Pure(Emo.Sad))) },
+            new[] { P(Starlover, "[사진] 1년 전 첫 댓글 캡처", "[반응] 두근×31", Pure(Emo.Shy), Syn("두근")) },
+            new[] { Or(P(Doubter, "[사진] 관찰 기록으로 가득한 메모장", "[시각] 밤 12시", Syn("삐짐"), Pure(Emo.Anger)),
+                       P(Doubter, "[반응] 박제×80", "[시각] 새벽 5시", Pure(Emo.Anger))) },
             new Post[0],
         };
 
         // 예전에 날짜별로 넣었던 지나가는 팬 글: 이제 글 풀로 간다
         static readonly Post[] ExtraPool =
         {
-            P(null, "■ ☆ ■■ ◎ ■■", "[사진] 리본 달린 선물 상자", "[반응] 케이크×5", Hint.Full, Pure(Emo.Joy)),
-            P(null, "■■ ♡ ■■■ ..", "[사진] 손편지", "[반응] 미소×3", Hint.Full, Pure(Emo.Shy)),
-            P(null, "▲ ■■■ ※ ■!!", "[사진] 금 간 폰 화면", "[반응] 빡침×9", Hint.Full, Pure(Emo.Anger)),
-            P(null, "■ ☆ ■■ ▲ ■", "[사진] 친구의 수상 소식", "[반응] 박수×30", Hint.None, Syn("질투")),
-            P(null, "∽ ■■■ ◉ ■", "[사진] 반쯤 가린 셀카", "[반응] 두근×11", Hint.Partial, Syn("두근"), Pure(Emo.Shy)),
-            P(null, "■■ ♯ ■ ▲ ■■!!", "[사진] 구겨진 영수증", "[시각] 밤 10시", Hint.Full, Pure(Emo.Anger)),
-            P(null, "♯ ■ ∽ ■■ ~", "[사진] 약속에 늦은 친구 메시지", "[반응] 흥×7", Hint.None, Syn("삐짐")),
-            P(null, "❀ ■■■ ◐ ■", "[사진] 커플 머그컵", "[반응] 하트×4", Hint.Full, Pure(Emo.Shy)),
+            P(null, "[사진] 리본 달린 선물 상자", "[반응] 케이크×5", Pure(Emo.Joy)),
+            P(null, "[사진] 손편지", "[반응] 미소×3", Pure(Emo.Shy)),
+            P(null, "[사진] 금 간 폰 화면", "[반응] 빡침×9", Pure(Emo.Anger)),
+            P(null, "[사진] 친구의 수상 소식", "[반응] 박수×30", Syn("질투")),
+            P(null, "[사진] 반쯤 가린 셀카", "[반응] 두근×11", Syn("두근"), Pure(Emo.Shy)),
+            P(null, "[사진] 구겨진 영수증", "[시각] 밤 10시", Pure(Emo.Anger)),
+            P(null, "[사진] 약속에 늦은 친구 메시지", "[반응] 흥×7", Syn("삐짐")),
+            P(null, "[사진] 커플 머그컵", "[반응] 하트×4", Pure(Emo.Shy)),
         };
         static readonly string[] ExtraPlains =
         {
@@ -440,9 +452,9 @@ namespace Kaomoji
         public static Post Followup(Post held, int day) => new()
         {
             Id = $"f{day}", Author = held.Author,
-            Text = $"■ {held.Text.Split(' ').First(Sym.ContainsKey)} ■■ ♯ ■ …?",
+            Text = Emojify("왜 어제 답 안 해 줬어…?", new[] { Pure(Emo.Anger) }, day),
             Clues = new[] { "[반응] 서운함", "[시각] 답장 기다린 새벽" },
-            Hint = Hint.Partial, Answers = new[] { Pure(Emo.Anger), Syn("삐짐") },
+            Answers = new[] { Pure(Emo.Anger), Syn("삐짐") },
             Plain = "왜 어제 답 안 해 줬어…?",
         };
 
@@ -453,9 +465,9 @@ namespace Kaomoji
             return new Post
             {
                 Id = $"m{day}_{n}", Author = original.Author, Plain = $"{scene} 사진에 네 얼굴 {face} 붙였어! 이거 맞지?",
-                Text = face + " " + Scramble(plain, original.Answers, plain.Sum(c => c)),
+                Text = face + " " + Emojify(plain, original.Answers, plain.Sum(c => c)),
                 Clues = new[] { $"[사진] {scene}에 붙은 {face}", "[반응] 갸웃×7" },
-                Hint = Hint.Partial, Answers = original.Answers, Misuse = face,
+                Answers = original.Answers, Misuse = face,
             };
         }
 
@@ -638,26 +650,6 @@ U|길거리 간판이 전부 얼굴로 바뀌었어|[사진] 얼굴 간판|[반�
             ['T'] = Syn("괜찮은 척"), ['G'] = Syn("질투"), ['D'] = Syn("두근"), ['P'] = Syn("삐짐"), ['O'] = Syn("집착"),
         };
 
-        // 실제 문장 → 깨진 글: 낱말마다 ■(길이 1~4)에 끝의 !?… 은 남기고, 정답 감정의 기호를 한두 개 섞는다
-        static string Scramble(string plain, Answer[] answers, int seed)
-        {
-            bool blank = plain.Contains('□'); // 빈칸 긴 글은 빈칸(□)을 그대로 두고 더 길게
-            var words = plain.Split(' ').Take(blank ? 11 : 6).Select(w =>
-            {
-                if (w == "□") return w;
-                int cut = w.Length;
-                while (cut > 0 && "!?….~ㅋㅎ".IndexOf(w[cut - 1]) >= 0) cut--;
-                return new string('■', Math.Clamp(cut, 1, 4)) + w.Substring(cut);
-            }).ToList();
-            var emos = answers.SelectMany(a => new[] { a.Eye, a.Mouth }).Where(e => e != Emo.Neutral).Distinct().ToList();
-            for (int k = 0; k < emos.Count; k++)
-            {
-                var symbols = Sym.Where(x => x.Value == emos[k] && !SecondSet.Contains(x.Key)).Select(x => x.Key).ToList(); // 첫 세트로 쓴다
-                words.Insert((seed + k * 2) % (words.Count + 1), symbols[(seed / 3 + k) % symbols.Count]);
-            }
-            return string.Join(" ", words);
-        }
-
         static IEnumerable<Post> ParseTable(string table, string idPrefix)
         {
             int n = 0;
@@ -668,13 +660,12 @@ U|길거리 간판이 전부 얼굴로 바뀌었어|[사진] 얼굴 간판|[반�
                 var parts = f[0].Split('>');
                 var answers = parts[0].Split('+').Select(c => Codes[c[0]]).ToArray();
                 var answers2 = parts.Length > 1 ? parts[1].Split('+').Select(c => Codes[c[0]]).ToArray() : null;
-                var hint = f[4] == "F" ? Hint.Full : f[4] == "P" ? Hint.Partial : Hint.None;
-                var post = P(null, null, f[2], f[3], hint, answers);
+                var post = P(null, f[2], f[3], answers);
                 post.Answers2 = answers2;
                 post.Literal = f.Length > 5 && f[5] == "L";
                 post.Id = $"{idPrefix}{n++}";
                 post.Plain = f[1];
-                post.Text = Scramble(f[1], answers2 == null ? answers : answers.Concat(answers2).ToArray(), f[1].Sum(c => c));
+                post.Text = Emojify(f[1], answers2 == null ? answers : answers.Concat(answers2).ToArray(), f[1].Sum(c => c));
                 post.WantsCreepy = f[0] == "O"; // 집착 글은 섬뜩한 답장도 반긴다
                 yield return post;
             }
@@ -687,11 +678,13 @@ U|길거리 간판이 전부 얼굴로 바뀌었어|[사진] 얼굴 간판|[반�
                 {
                     Posts[d][i].Id = $"d{d + 1}p{i}";
                     Posts[d][i].Plain = Plains[Posts[d][i].Id];
-                    if (Posts[d][i].Bad != null) { Posts[d][i].Bad.Id = $"d{d + 1}p{i}b"; Posts[d][i].Bad.Plain = Plains[Posts[d][i].Bad.Id]; }
+                    Posts[d][i].Text = Emojify(Posts[d][i].Plain, Posts[d][i].Answers, d * 7 + i);
+                    var bad = Posts[d][i].Bad;
+                    if (bad != null) { bad.Id = $"d{d + 1}p{i}b"; bad.Plain = Plains[bad.Id]; bad.Text = Emojify(bad.Plain, bad.Answers, d * 7 + i + 1); }
                 }
 
             // 풀: 직접 쓴 지나가는 팬 글 + 표에서 만든 글
-            for (int i = 0; i < ExtraPool.Length; i++) { ExtraPool[i].Id = $"x{i}"; ExtraPool[i].Plain = ExtraPlains[i]; }
+            for (int i = 0; i < ExtraPool.Length; i++) { ExtraPool[i].Id = $"x{i}"; ExtraPool[i].Plain = ExtraPlains[i]; ExtraPool[i].Text = Emojify(ExtraPlains[i], ExtraPool[i].Answers, i); }
             Pool.AddRange(ExtraPool);
             Pool.AddRange(ParseTable(PoolTable, "r"));
             Uneasy.AddRange(ParseTable(UneasyTable, "u"));
