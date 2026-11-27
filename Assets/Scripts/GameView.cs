@@ -735,7 +735,7 @@ namespace Kaomoji
             Bar("bar_f", "♥ 팔로워", frenzy ? UnityEngine.Random.Range(0, Balance.FollowerGoal) : S.Followers, Balance.FollowerGoal, Pal.BarFollow,
                 frenzy ? $"{S.Followers + UnityEngine.Random.Range(-999, 99999):#,0}!!" : $"{S.Followers:#,0}", hover.f, StatHelp[0]);
             // 얼굴 연습 중이거나 그걸 고르려 하면 의심 옆에 ×½ 방패
-            bool shield = S.Practicing || (hover.shield && Time.time * 4 % 2 < 1);
+            bool shield = S.Practicing || hover.shield;
             Bar("bar_s", "!? 의심", S.Sus, 100, Pal.BarSus, $"{Mathf.RoundToInt(S.Sus)}{(shield ? "  ×½" : "")}", hover.sus, StatHelp[1]);
             Bar("bar_fat", "~ 피로", S.Fat, S.FatMax, Pal.BarFat, $"{Mathf.RoundToInt(S.Fat)}/{S.FatMax}", hoverFat, S.BrokeDown ? StatHelp[2] + " 한 번 무너졌다. 다시 다 차면 끝." : StatHelp[2]);
             if (statHelp) foreach (var h in StatHelp) GUILayout.Label(h, small);
@@ -765,12 +765,12 @@ namespace Kaomoji
             GUI.DrawTexture(r, Tex(Pal.BarBg));
             var f = r; f.width *= Mathf.Clamp01(v / max);
             GUI.DrawTexture(f, Tex(color));
-            if (preview != 0 && Time.time * 4 % 2 < 1)
+            if (preview != 0) // 깜빡이면 눈이 아프니 그대로 보여 준다: 바뀔 구간을 다른 색으로
             {
                 float a = Mathf.Clamp(v + Mathf.Min(0, preview), 0, max), b = Mathf.Clamp(v + Mathf.Max(0, preview), 0, max);
                 GUI.DrawTexture(new Rect(r.x + r.width * a / max, r.y, r.width * (b - a) / max, r.height), Tex(preview > 0 ? Pal.Hot : Pal.Ease));
             }
-            GUILayout.Label(preview != 0 && Time.time * 4 % 2 < 1 ? $"{preview:+#,0;-#,0}" : value, dotStyle, GUILayout.Width(84)); // 미리보기 중엔 바뀔 양이 깜빡인다
+            GUILayout.Label(preview != 0 ? $"→ {Mathf.RoundToInt(Mathf.Clamp(v + preview, 0, max)):#,0}" : value, dotStyle, GUILayout.Width(84)); // 미리보기 중엔 바뀐 뒤의 값
             GUILayout.EndHorizontal();
             Mark(key);
             Explain(help);
@@ -804,10 +804,11 @@ namespace Kaomoji
             var bat = new Rect(VW - 150, 9, 120, BarH - 18);
             GUI.Label(new Rect(bat.x - 30, 4, 28, BarH - 8), "🔋", new GUIStyle(dotStyle) { fontSize = 18, alignment = TextAnchor.MiddleCenter });
             GUI.Box(bat, GUIContent.none, cellFrame);
-            int cells = Mathf.CeilToInt(5 * (1 - S.Fat / S.FatMax));
-            bool low = cells <= 1 && Time.time * 3 % 2 < 1;
-            for (int i = 0; i < cells; i++) GUI.DrawTexture(new Rect(bat.x + 4 + i * 23, bat.y + 4, 19, bat.height - 8), Tex(low ? Pal.Hot : Pal.BarFat));
-            if (hoverFat != 0 && Time.time * 4 % 2 < 1) GUI.Label(new Rect(bat.x, bat.yMax, bat.width, 18), hoverFat < 0 ? "▲" : "▼", new GUIStyle(dotStyle) { fontSize = 12, alignment = TextAnchor.MiddleCenter });
+            // 고르려는 행동으로 찰 칸은 하늘색, 닳을 칸은 회색으로 미리 (깜빡임 없이)
+            int Cells(float fat) => Mathf.CeilToInt(5 * (1 - Mathf.Clamp(fat, 0, S.FatMax) / S.FatMax));
+            int now = Cells(S.Fat), after = Cells(S.Fat + hoverFat);
+            for (int i = 0; i < Mathf.Max(now, after); i++)
+                GUI.DrawTexture(new Rect(bat.x + 4 + i * 23, bat.y + 4, 19, bat.height - 8), Tex(i >= now ? Pal.Ease : i >= after ? Pal.Gray : Pal.BarFat));
             ExplainRect("배터리: 의태 피로. 다 닳지 않게 쉬자.", bat, Vector2.zero);
         }
 
@@ -1615,7 +1616,7 @@ namespace Kaomoji
                 if (i == diaryPick) { GUI.Label(r, "", offBtn); continue; }
                 if (st.Kind is not { } m) { GUI.Label(r, st.Text, StickerStyle(st.Color)); continue; }
                 bool hot = r.Contains(Event.current.mousePosition);
-                if (GUI.Button(r, hot && Time.time * 3 % 2 < 1 ? MemoryBadge(m) : st.Text, StickerStyle(st.Color)) && !blocked) { diaryPick = i; diaryPickT = Time.time; }
+                if (GUI.Button(r, hot ? MemoryBadge(m) : st.Text, StickerStyle(st.Color)) && !blocked) { diaryPick = i; diaryPickT = Time.time; }
                 if (hot && Event.current.type == EventType.Repaint) hoverNext = (0, m == Memory.ReplyBad ? -5 : 0, m == Memory.ReplyGood ? 100 : 0, false); // 오른쪽 위 막대도 미리 움직인다
             }
             GUI.matrix = keep;
