@@ -432,8 +432,7 @@ namespace Kaomoji
             // 아래 → 위 → 오른쪽 → 왼쪽, 모두 창을 가리면 화면 네 귀퉁이까지 보고 창을 가장 덜 가리는 자리 (대상은 절대 안 가린다)
             var cands = new[] { Fit(a.x, a.yMax + 12), Fit(a.x, a.y - h - 12), Fit(a.xMax + 12, a.y), Fit(a.x - w - 12, a.y),
                 Fit(4, VH - h - 4), Fit(VW - w - 4, VH - h - 4), Fit(VW - w - 4, BarH + 4), Fit(4, BarH + 4) };
-            // 대상이 든 창은 가려도 된다 (그 창 안을 가리키는 중이니까). 나머지 창은 덜 가릴수록 좋다
-            var wins = open.Where(o => rects.ContainsKey(o) && !rects[o].Contains(a.center)).Select(o => rects[o]).ToList();
+            var wins = open.Where(rects.ContainsKey).Select(o => rects[o]).ToList(); // 대상이 든 창도 포함: 가리키는 창 안이 안 보이면 안 되니까
             float Covered(Rect r) => wins.Sum(o => Mathf.Max(0, Mathf.Min(r.xMax, o.xMax) - Mathf.Max(r.x, o.x)) * Mathf.Max(0, Mathf.Min(r.yMax, o.yMax) - Mathf.Max(r.y, o.y)));
             var pick = cands.Where(r => !r.Overlaps(a)).OrderBy(Covered).FirstOrDefault(); // OrderBy는 안정 정렬이라 같으면 앞 순서
             if (pick.width == 0) pick = cands[0];
