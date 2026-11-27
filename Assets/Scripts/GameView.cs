@@ -1078,7 +1078,7 @@ namespace Kaomoji
         // 이 선택이 실제로 바꾼 것: 문장 대신 수치 기호로 (♥ 팔로워, !? 의심, 🔋 배터리). 정상인(Aa)에게 답해 오른 의심은 따로 붙인다
         string Delta((int f, float s, float fat) b, bool holdout = false)
         {
-            int f = S.Followers - b.f, sus = Mathf.RoundToInt(S.Sus - b.s); float fat = S.Fat - b.fat;
+            int f = S.Followers - b.f, sus = Mathf.RoundToInt(S.Sus - b.s);
             var parts = new List<string>();
             if (f != 0) parts.Add($"♥{f:+#,0;-#,0}");
             if (sus != 0) parts.Add($"!?{sus:+0;-0}{(holdout && sus > 0 ? " Aa" : "")}");
