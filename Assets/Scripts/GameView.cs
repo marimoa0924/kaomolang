@@ -192,7 +192,7 @@ namespace Kaomoji
             {
                 // 피로 70: 그림체 밖에서 덮치는 노이즈 1초와 메시지 하나 (드물게, 매번 다른 내용)
                 noiseUntil = Time.time + 1f;
-                toasts.Add(new Toast { T0 = Time.time, Id = 200 + toastSeq++ % 50, Body = S.NoiseMsg, Title = "🔋 LOW BATTERY" });
+                toasts.Add(new Toast { T0 = Time.time, Id = 200 + toastSeq++ % 50, Body = S.NoiseMsg, Title = "~ MIMIC OVERHEAT" });
                 S.NoiseMsg = null;
             }
             if (!curtainSwitched && Time.time - curtainT >= CurtainIn)
@@ -217,7 +217,7 @@ namespace Kaomoji
                 noiseUntil = Time.time + ShutRiot;
                 popups.Clear();
                 for (int i = 0; i < 7; i++)
-                    toasts.Add(new Toast { T0 = Time.time + i * 0.08f, Id = 200 + toastSeq++ % 50, Body = Glitch(ErrFat[i % ErrFat.Length], 0.5f), Title = "🔋 LOW BATTERY" });
+                    toasts.Add(new Toast { T0 = Time.time + i * 0.08f, Id = 200 + toastSeq++ % 50, Body = Glitch(ErrFat[i % ErrFat.Length], 0.5f), Title = "~ MIMIC OVERHEAT" });
             }
             if (!shutSwitched && Time.time - shutT >= ShutHalt)
             {
@@ -470,9 +470,6 @@ namespace Kaomoji
 
         void Float(string anchor, string text) => floaters.Add(new Floater { Anchor = anchor, Text = text, T0 = Time.time });
 
-        // 배터리는 늘 0~100: 피로의 반대를 한계 대비 비율로 (셧다운 뒤 한계가 120이 돼도 100이 최대)
-        float Bat(float fat) => 100 * (1 - Mathf.Clamp(fat, 0, S.FatMax) / S.FatMax);
-
         (int f, float s, float fat) Snap() => (S.Followers, S.Sus, S.Fat);
 
         // 수치 변화는 문장 대신 게이지 옆에 튀어오르는 숫자로
@@ -481,7 +478,7 @@ namespace Kaomoji
             void One(string a, float d) { if (Mathf.RoundToInt(d) != 0) Float(a, $"{(d > 0 ? "+" : "")}{Mathf.RoundToInt(d):#,0}"); }
             One("bar_f", S.Followers - b.f);
             One("bar_s", S.Sus - b.s);
-            One("bar_fat", Bat(S.Fat) - Bat(b.fat));
+            One("bar_fat", S.Fat - b.fat);
         }
 
         void DrawFloaters()
@@ -599,8 +596,8 @@ namespace Kaomoji
                 {
                     // 정지: 깨진 얼굴 하나와 깜빡이는 정지 문구
                     GUI.Label(new Rect(0, H / 2 - 90, W, 70), Glitch("(・_・)", Mathf.Clamp01((t - ShutOff) * 0.5f)), new GUIStyle(faceStyle) { fontSize = 56 });
-                    GUI.Label(new Rect(0, H / 2 + 10, W, 50), Glitch("BATTERY 0%", 0.25f), big);
-                    GUI.Label(new Rect(0, H / 2 + 60, W, 30), Glitch("MIMIC.EXE POWERED OFF", 0.3f), new GUIStyle(dotStyle) { fontSize = 18, alignment = TextAnchor.MiddleCenter });
+                    GUI.Label(new Rect(0, H / 2 + 10, W, 50), Glitch("SYSTEM HALT", 0.25f), big);
+                    GUI.Label(new Rect(0, H / 2 + 60, W, 30), Glitch("MIMIC.EXE NOT RESPONDING", 0.3f), new GUIStyle(dotStyle) { fontSize = 18, alignment = TextAnchor.MiddleCenter });
                     return;
                 }
                 if (t < ShutDay)
@@ -755,6 +752,7 @@ namespace Kaomoji
             // 얼굴 연습 중이거나 그걸 고르려 하면 의심 옆에 ×½ 방패
             bool shield = S.Practicing || hover.shield;
             Bar("bar_s", "!? 의심", S.Sus, 100, Pal.BarSus, $"{Mathf.RoundToInt(S.Sus)}{(shield ? "  ×½" : "")}", hover.sus, StatHelp[1]);
+            Bar("bar_fat", "~ 피로", S.Fat, S.FatMax, Pal.BarFat, $"{Mathf.RoundToInt(S.Fat)}/{S.FatMax}", hoverFat, S.BrokeDown ? StatHelp[2] + " 한 번 무너졌다. 다시 다 차면 끝." : StatHelp[2]);
             if (statHelp) foreach (var h in StatHelp) GUILayout.Label(h, small);
             GUILayout.BeginHorizontal();
             GUILayout.Label(Monologue(), small);
@@ -770,6 +768,7 @@ namespace Kaomoji
         {
             $"♥ 팔로워: 마지막 날에 {Balance.FollowerGoal:#,0}명이 넘으면 성공.",
             "!? 의심: 100이면 정체가 들킨다.",
+            "~ 의태 피로: 외출·답장에 오르고 잠·휴식으로 내린다. 다 차면 의태가 무너진다.",
         };
 
         void Bar(string key, string name, float v, float max, string color, string value, float preview, string help)
@@ -792,7 +791,7 @@ namespace Kaomoji
             Explain(help);
         }
 
-        // 태블릿 상태 표시줄: 왼쪽 날·시간, 가운데 열린 창, 오른쪽 알림과 배터리(= 의태 피로, 숫자는 [?]에서만)
+        // 태블릿 상태 표시줄: 왼쪽 날·시간, 가운데 열린 창, 오른쪽 관제실 통신 기록
         void DrawStatusBar()
         {
             GUI.Box(new Rect(0, 0, VW, BarH), GUIContent.none, taskbar);
@@ -817,21 +816,6 @@ namespace Kaomoji
             var bell = new Rect(VW - 256, 4, 56, BarH - 8);
             if (GUI.Button(bell, "🔔", btn) && !blocked) pending = () => Open(Win.Messenger);
             ExplainRect("관제실 통신 기록", bell, Vector2.zero);
-            // 배터리: 피로가 오를수록 칸이 닳는다. 위험할 땐 깜빡인다
-            var bat = new Rect(VW - 180, 9, 120, BarH - 18);
-            GUI.Label(new Rect(bat.x - 30, 4, 28, BarH - 8), "🔋", new GUIStyle(dotStyle) { fontSize = 18, alignment = TextAnchor.MiddleCenter });
-            GUI.Box(bat, GUIContent.none, cellFrame);
-            // 고르려는 행동으로 찰 칸은 하늘색, 닳을 칸은 회색으로 미리 (깜빡임 없이)
-            int Cells(float fat) => Mathf.CeilToInt(5 * (1 - Mathf.Clamp(fat, 0, S.FatMax) / S.FatMax));
-            int now = Cells(S.Fat), after = Cells(S.Fat + hoverFat);
-            for (int i = 0; i < Mathf.Max(now, after); i++)
-                GUI.DrawTexture(new Rect(bat.x + 4 + i * 23, bat.y + 4, 19, bat.height - 8), Tex(i >= now ? Pal.Ease : i >= after ? Pal.Gray : Pal.BarFat));
-            // 정확한 남은 양. 고르려는 행동이 있으면 바뀐 뒤 값
-            int left = Mathf.RoundToInt(Bat(S.Fat)), leftAfter = Mathf.RoundToInt(Bat(S.Fat + hoverFat));
-            var num = new Rect(bat.xMax + 4, 4, 56, BarH - 8);
-            GUI.Label(num, hoverFat != 0 ? $"→{leftAfter}" : $"{left}", new GUIStyle(dotStyle) { fontSize = 18, alignment = TextAnchor.MiddleLeft });
-            MarkRect("bar_fat", new Rect(bat.x, bat.y + 26, bat.width + 60, bat.height), Vector2.zero);
-            ExplainRect($"배터리 {left}/100. 외출·답장에 닳고 잠·휴식으로 찬다. 다 닳지 않게 쉬자." + (S.BrokeDown ? " 한 번 꺼졌다. 다시 다 닳으면 끝." : ""), new Rect(bat.x - 30, 0, bat.width + 90, BarH), Vector2.zero);
         }
 
         // 창 제목도 글자 대신 아이콘
@@ -851,18 +835,18 @@ namespace Kaomoji
         (string key, Func<bool> when, string target, string text, bool urgent)[] orders;
         (string key, Func<bool> when, string target, string text, bool urgent)[] Orders => orders ??= new (string, Func<bool>, string, string, bool)[]
         {
-            ("battery", () => S.Day >= 2, "bar_fat", "위쪽 🔋는 네 의태의 배터리다.\n외출과 답장에 닳고, 다 닳으면 꺼진다.", false),
-            ("rest", () => S.On(Feature.Rest) && S.CanAct, "icon_home", "[집]을 열었다. 쉬면 배터리가 찬다.\n카드 오른쪽 그림이 효과다.", false),
+            ("battery", () => S.Day >= 2, "bar_fat", "~ 피로는 의태가 지친 정도다.\n외출과 답장에 오르고, 다 차면 무너진다.", false),
+            ("rest", () => S.On(Feature.Rest) && S.CanAct, "icon_home", "[집]을 열었다. 쉬면 피로가 내려간다.\n카드 오른쪽 그림이 효과다.", false),
             ("synergy", () => open.Contains(Win.Sns) && snsTab == 1 && S.Tonight.Any(p => p.Answers.Any(a => a.IsSynergy)), "feed", "감정이 둘 섞인 글이 있다.\n눈과 입을 다르게 지으면 완벽이다.", false),
             ("near", () => S.Replies.Any(r => r?.R == Result.Near), "feed", "분위기는 맞았다. 아쉬운 오답(…)이다.\n분위기까지 틀리면 큰 오답(×).", false),
             ("typing", () => open.Contains(Win.Sns) && snsTab == 1 && S.On(Feature.Typing) && S.Tonight.Any(p => Regulars.Contains(p.Author ?? "")) && Time.time - snsOpenT < 2, "feed", "단골이 입력 중이다.\n오래 쓸수록 감정이 세다.", false),
             ("holdout", () => open.Contains(Win.Sns) && snsTab == 1 && S.Tonight.Any(p => p.Holdout), "feed", "아직 글자를 쓰는 인간이 있다.\n이 자에게 답하면 의심받는다.", false),
             ("misuse", () => open.Contains(Win.Sns) && snsTab == 1 && S.Tonight.Any(p => p.Misuse != null), "feed", "어제 틀린 네 얼굴이 엉뚱하게 쓰이고 있다.\n제대로 답하면 오해가 풀린다.", false),
-            ("low", () => S.Fat >= Balance.NoiseFrom, "bar_fat", "배터리 부족. 의태가 흐려진다.\n쉬어라.", true),
+            ("low", () => S.Fat >= Balance.NoiseFrom, "bar_fat", "피로가 높다. 의태가 흐려진다.\n쉬어라.", true),
             ("off", () => S.BrokeDown && ShutDone, "bar_fat", "의태가 한 번 꺼졌다.\n다시 꺼지면 돌아올 수 없다.", true),
-            ("skill", () => S.Day >= Balance.GrowOuting, "bar_fat", "의태가 손에 익었다.\n외출에 드는 배터리가 줄었다.", false),
+            ("skill", () => S.Day >= Balance.GrowOuting, "bar_fat", "의태가 손에 익었다.\n외출 피로가 줄었다.", false),
             ("letters", () => S.Day >= Balance.GrowLetters && open.Contains(Win.Sns), "feed", "글자 모양이 몇 개 더 눈에 익었다.", false),
-            ("muscle", () => S.Day >= Balance.GrowRest, "icon_home", "표정 근육이 붙었다.\n쉬면 배터리가 더 찬다.", false),
+            ("muscle", () => S.Day >= Balance.GrowRest, "icon_home", "표정 근육이 붙었다.\n쉬면 피로가 더 내려간다.", false),
             ("acting", () => S.Day >= Balance.GrowNear, "stats", "연기에 몰입했다.\n아쉽게 틀려도 팔로워가 떠나지 않는다.", false),
         };
 
@@ -1133,16 +1117,16 @@ namespace Kaomoji
         }
 
         float homeT;
-        // 효과는 숫자 대신 상태 표시줄과 같은 그림으로: 🔋▲▲ 배터리가 찬다, !?▼ 의심이 내려간다, ♥▲ 팔로워, !?×½ 방패
-        // 이 선택이 실제로 바꾼 것: 문장 대신 수치 기호로 (♥ 팔로워, !? 의심, 🔋 배터리). 정상인(Aa)에게 답해 오른 의심은 따로 붙인다
+        // 효과는 숫자 대신 그림으로: ~▼▼ 피로가 내려간다, !?▼ 의심이 내려간다, ♥▲ 팔로워, !?×½ 방패
+        // 이 선택이 실제로 바꾼 것: 문장 대신 수치 기호로 (♥ 팔로워, !? 의심, ~ 피로). 정상인(Aa)에게 답해 오른 의심은 따로 붙인다
         string Delta((int f, float s, float fat) b, bool holdout = false)
         {
             int f = S.Followers - b.f, sus = Mathf.RoundToInt(S.Sus - b.s);
             var parts = new List<string>();
             if (f != 0) parts.Add($"♥{f:+#,0;-#,0}");
             if (sus != 0) parts.Add($"!?{sus:+0;-0}{(holdout && sus > 0 ? " Aa" : "")}");
-            float bat = Bat(S.Fat) - Bat(b.fat);
-            if (Math.Abs(bat) >= 0.5f) parts.Add($"🔋{bat:+0;-0}");
+            float fat = S.Fat - b.fat;
+            if (Math.Abs(fat) >= 0.5f) parts.Add($"~{fat:+0;-0}");
             return string.Join("  ", parts);
         }
 
@@ -1154,7 +1138,7 @@ namespace Kaomoji
             var r = GUILayoutUtility.GetLastRect();
             HoverFat(fx.fat, fx.sus, fx.f, fx.shield);
             var parts = new List<string>();
-            if (fx.fat != 0) parts.Add("🔋" + Arrows(-fx.fat, 15));
+            if (fx.fat != 0) parts.Add("~" + Arrows(fx.fat, 15));
             if (fx.sus != 0) parts.Add("!?" + Arrows(fx.sus, 10));
             if (fx.f != 0) parts.Add("♥" + Arrows(fx.f, 150));
             if (fx.shield) parts.Add("!?×½");
@@ -1168,7 +1152,7 @@ namespace Kaomoji
         // 집 활동 결과에 쉬어서 내려간 수치를 한 줄로
         string RestLine((int f, float s, float fat) b)
         {
-            var parts = new List<string> { $"🔋 배터리 {Mathf.RoundToInt(Bat(S.Fat) - Bat(b.fat)):+0;-0}" };
+            var parts = new List<string> { $"~ 피로 {Mathf.RoundToInt(S.Fat - b.fat):+0;-0}" };
             if (Mathf.RoundToInt(S.Sus - b.s) != 0) parts.Add($"!? 의심 {Mathf.RoundToInt(S.Sus - b.s):+0;-0}");
             return string.Join("   ", parts);
         }
@@ -1243,7 +1227,7 @@ namespace Kaomoji
             "@ 멘션: 팬 글의 마음을 짐작해 얼굴로 답한다. 어려우면 ‖ 나중에 (다음 밤에 서운해하며 돌아온다).",
             "■는 못 읽는 글자. 이모지는 뜻 그대로다. 팔로워가 늘면 읽히는 글자도 는다.",
             "틀려도 분위기가 같으면 아쉬운 오답(…). 분위기까지 틀리면 큰 오답(×).",
-            "판정 아래 기호는 그 답이 바꾼 것: ♥ 팔로워, !? 의심, 🔋 배터리. Aa는 아직 글자를 쓰는 사람에게 답해 의심이 오른 것.",
+            "판정 아래 기호는 그 답이 바꾼 것: ♥ 팔로워, !? 의심, ~ 피로. Aa는 아직 글자를 쓰는 사람에게 답해 의심이 오른 것.",
         };
 
         void DrawSns()
@@ -1640,11 +1624,11 @@ namespace Kaomoji
         // 설정 창의 이름과 한 줄 설명 (마우스를 올리면 보인다)
         static readonly Dictionary<Feature, (string name, string what)> FeatureNames = new()
         {
-            [Feature.Rest] = ("휴식", "[집]에서 푹 쉬기·피드 구경·얼굴 연습 중 하나로 배터리를 채운다."),
+            [Feature.Rest] = ("휴식", "[집]에서 푹 쉬기·피드 구경·얼굴 연습 중 하나로 피로를 내린다."),
             [Feature.Typing] = ("입력 중 표시", "단골 글이 올라오기 전 '입력 중'이 뜬다. 길수록 감정이 세고, 깜빡이면 섬뜩을 반기는 글."),
             [Feature.Misuse] = ("오역 후속 글", "일부 글에 크게 틀리거나 섬뜩하게 답하면, 다음 밤 그 팬이 내 얼굴을 엉뚱한 곳에 쓴 글이 온다."),
             [Feature.Notices] = ("아침 공지", "2일차부터 아침마다 유행 공지 한 장. 그날 하루 규칙이 하나 바뀐다."),
-            [Feature.PlaceAbility] = ("장소 능력", "장소 호감 2·3단계마다 작은 보너스가 붙는다 (외출 배터리 소모 −3 등)."),
+            [Feature.PlaceAbility] = ("장소 능력", "장소 호감 2·3단계마다 작은 보너스가 붙는다 (외출 피로 −3 등)."),
             [Feature.Intimacy] = ("단골 친밀도", "단골에게 맞히면 ♥가 쌓이고, 틀리거나 미루면 서운해서 다음 밤 입이 따끔·쿨만 남는다."),
             [Feature.DecorMix] = ("장식 섞기", "[집]에서 특수 장식 둘을 섞어 새 장식을 만든다."),
             [Feature.HiddenMood] = ("기분 숨김", "호감 2단계부터 NPC가 절반 확률로 말을 숨긴다(“……”). 상황 설명만 보고 고른다."),
@@ -1689,7 +1673,7 @@ namespace Kaomoji
         // 오늘의 한 장면: 고를 수 있는 스티커마다 내일 효과 (상태 표시줄과 같은 그림)
         static string MemoryBadge(Memory m) => m switch
         {
-            Memory.MeetWin => "♥ 호감▲", Memory.MeetFail => "내일 → 🔋▲", Memory.ReplyGood => "♥▲",
+            Memory.MeetWin => "♥ 호감▲", Memory.MeetFail => "내일 → ~▼", Memory.ReplyGood => "♥▲",
             Memory.ReplyBad => "!?▼", _ => "내일 ↑ ♥×1.2",
         };
 
