@@ -895,13 +895,23 @@ namespace Kaomoji
 
         string Hearts(int n) => $"<color={Pal.Heart}>{new string('♥', n)}</color><color={Pal.Gray}>{new string('♥', 3 - n)}</color>";
 
-        // 다음 하트까지 남은 성공 수: 2단계 뒤엔 성공 4번이 필요해 하트만으론 멈춘 것처럼 보인다
-        string AffPips(string id)
+        // 장소 호감: 다음 하트가 성공 수만큼 n분의 1씩 차오른다 (별도 ●○ 표시 없이 하트 하나로)
+        void HeartRow(Rect r, string id)
         {
             int lv = S.AffLevel(id);
-            if (lv >= 3) return "";
-            int w = S.AffWins.GetValueOrDefault(id);
-            return new string('●', w) + new string('○', Balance.AffNeed[lv] - w);
+            float part = lv >= 3 ? 0 : (float)S.AffWins.GetValueOrDefault(id) / Balance.AffNeed[lv];
+            var st = new GUIStyle(dotStyle) { fontSize = 22, alignment = TextAnchor.MiddleCenter, richText = true };
+            float w = 26, x0 = r.center.x - w * 1.5f;
+            for (int i = 0; i < 3; i++)
+            {
+                var cell = new Rect(x0 + i * w, r.y, w, r.height);
+                GUI.Label(cell, $"<color={Pal.Gray}>♥</color>", st);
+                float fill = i < lv ? 1 : i == lv ? part : 0;
+                if (fill <= 0) continue;
+                GUI.BeginGroup(new Rect(cell.x, cell.y, w * fill, cell.height)); // 왼쪽부터 잘라 그려서 반쪽 하트
+                GUI.Label(new Rect(0, 0, w, cell.height), $"<color={Pal.Heart}>♥</color>", st);
+                GUI.EndGroup();
+            }
         }
 
         void DrawPlaces()
@@ -914,9 +924,11 @@ namespace Kaomoji
                 for (int j = i; j < i + 2 && j < list.Length; j++)
                 {
                     var p = list[j];
-                    Btn($"<size=40>{p.Icon}</size>\n<size=20>{Hearts(S.Aff.GetValueOrDefault(p.Id))}</size>\n<size=14>{AffPips(p.Id)}</size>",
+                    Btn($"<size=40>{p.Icon}</size>\n\n",
                         () => { S.PrepareOuting(p.Id); enc = null; selEye = selMouth = Emo.Neutral; Close(Win.Places); Open(Win.Encounter); },
                         true, iconStyle, GUILayout.Height(120));
+                    var pr = GUILayoutUtility.GetLastRect();
+                    HeartRow(new Rect(pr.x, pr.yMax - 42, pr.width, 28), p.Id);
                     Mark($"place_{j}");
                     Explain(p.Name);
                     HoverFat(fat);
@@ -953,7 +965,7 @@ namespace Kaomoji
             if (special && enc == null && ev.Decor != null)
                 GUILayout.Label($"+ {ev.Decor.L}(?){ev.Decor.R}", new GUIStyle(faceStyle) { fontSize = 22 });
             else if (S.PendingPlace != null)
-                GUILayout.Label($"{Hearts(S.Aff.GetValueOrDefault(S.PendingPlace))} <size=14>{AffPips(S.PendingPlace)}</size>", new GUIStyle(dotStyle) { fontSize = 22, richText = true });
+                HeartRow(GUILayoutUtility.GetRect(90, 30, GUILayout.Width(90)), S.PendingPlace);
             GUILayout.EndHorizontal();
             GUILayout.Label(ev.Situation, label);
             GUILayout.Space(6);
