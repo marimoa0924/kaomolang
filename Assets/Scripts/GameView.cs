@@ -48,7 +48,8 @@ namespace Kaomoji
                 Ease = "#DBF4F9", Glitch1 = "#FFA4D5", Glitch2 = "#B6FBFF", Special = "#FFE3FA";
         }
 
-        const float VW = 1280, VH = 720, Bezel = 18, BarH = 38, PopupW = 420, CoachW = 300, ToastW = 330, ToastH = 84;
+        static float VW = 1280; // 화면 비율에 맞춰 늘어난다 (패드가 화면을 꽉 채우게)
+        const float VH = 720, Bezel = 18, BarH = 38, PopupW = 420, CoachW = 300, ToastW = 330, ToastH = 84;
         const int PopupId = 99, CoachId = 98, FxId = 300;
         static readonly Dictionary<Win, float> WinWidth = new()
         {
@@ -242,8 +243,9 @@ namespace Kaomoji
                 tip = tipNext; tipNext = null;
             }
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Tex(Pal.Letterbox));
-            float k = Mathf.Min(Screen.width / (VW + Bezel * 2), Screen.height / (VH + Bezel * 2));
-            if (k >= 1) k = Mathf.Floor(k); // 정수 배율로만 키워야 글자가 번지지 않는다
+            // 여백 없이 꽉 채운다: 높이에 맞춰 키우고 남는 가로는 패드를 넓힌다 (16:9보다 좁으면 1280 폭에 맞춘다)
+            float k = Mathf.Min(Screen.height / (VH + Bezel * 2), Screen.width / (1280 + Bezel * 2));
+            VW = Screen.width / k - Bezel * 2;
             GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - VW * k) / 2, (Screen.height - VH * k) / 2, 0), Quaternion.identity, new Vector3(k, k, 1));
 
             GUI.DrawTexture(new Rect(0, 0, VW, VH), S.Fat >= Balance.NoiseFrom || S.BrokeDown ? bgSmear : S.Act == 3 ? bgAct3 : S.Act == 2 ? bgAct2 : bgDay); // 한 번 붕괴하면 배경은 번진 채로
@@ -274,6 +276,7 @@ namespace Kaomoji
             DrawShutdown();
             DrawNoise();
 
+            if (popups.Count == 0) popupRect.x = (VW - PopupW) / 2; // 패드 폭이 화면 따라 바뀌니 새 팝업은 가운데로
             if (popups.Count > 0)
             {
                 popupRect.height = 0;
@@ -726,12 +729,8 @@ namespace Kaomoji
             Bar("bar_f", "♥ 팔로워", frenzy ? UnityEngine.Random.Range(0, Balance.FollowerGoal) : S.Followers, Balance.FollowerGoal, Pal.BarFollow,
                 frenzy ? $"{S.Followers + UnityEngine.Random.Range(-999, 99999):#,0}!!" : $"{S.Followers:#,0}", 0, StatHelp[0]);
             Bar("bar_s", "!? 의심", S.Sus, 100, Pal.BarSus, $"{Mathf.RoundToInt(S.Sus)}", 0, StatHelp[1]);
-            if (statHelp)
-            {
-                foreach (var h in StatHelp) GUILayout.Label(h, small);
-                // 배터리 숫자는 [?] 안에서만. 붕괴는 겪은 뒤에야 이름이 생긴다
-                GUILayout.Label($"🔋 의태 피로 {Mathf.RoundToInt(S.Fat)}/{S.FatMax}. 외출·답장에 닳고 잠·휴식으로 찬다." + (S.BrokeDown ? " 한 번 무너졌다. 다시 다 닳으면 끝." : ""), small);
-            }
+            Bar("bar_fat", "~ 피로", S.Fat, S.FatMax, Pal.BarFat, $"{Mathf.RoundToInt(S.Fat)}/{S.FatMax}", hoverFat, S.BrokeDown ? StatHelp[2] + " 한 번 무너졌다. 다시 다 차면 끝." : StatHelp[2]);
+            if (statHelp) foreach (var h in StatHelp) GUILayout.Label(h, small);
             GUILayout.BeginHorizontal();
             GUILayout.Label(Monologue(), small);
             GUILayout.FlexibleSpace();
@@ -746,6 +745,7 @@ namespace Kaomoji
         {
             $"♥ 팔로워: 마지막 날에 {Balance.FollowerGoal:#,0}명이 넘으면 성공.",
             "!? 의심: 100이면 정체가 들킨다.",
+            "~ 의태 피로: 외출·답장에 오르고 잠·휴식으로 내린다. 위쪽 배터리도 같이 닳는다.",
         };
 
         void Bar(string key, string name, float v, float max, string color, string value, float preview, string help)
@@ -800,7 +800,6 @@ namespace Kaomoji
             bool low = cells <= 1 && Time.time * 3 % 2 < 1;
             for (int i = 0; i < cells; i++) GUI.DrawTexture(new Rect(bat.x + 4 + i * 23, bat.y + 4, 19, bat.height - 8), Tex(low ? Pal.Hot : Pal.BarFat));
             if (hoverFat != 0 && Time.time * 4 % 2 < 1) GUI.Label(new Rect(bat.x, bat.yMax, bat.width, 18), hoverFat < 0 ? "▲" : "▼", new GUIStyle(dotStyle) { fontSize = 12, alignment = TextAnchor.MiddleCenter });
-            MarkRect("bar_fat", new Rect(bat.x - 30, bat.y + 20, bat.width, bat.height), Vector2.zero);
             ExplainRect("배터리: 의태 피로. 다 닳지 않게 쉬자.", bat, Vector2.zero);
         }
 
