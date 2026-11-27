@@ -242,6 +242,7 @@ namespace Kaomoji
         }
 
         // 휴식 셋: 고민할 건 숫자뿐. 9일차 성장 '표정 근육'부터 피로가 5씩 더 내려간다
+        public bool Practicing => Day <= practiceUntil; // 얼굴 연습 뒤 사흘: 오르는 의심 절반
         public static float RestFat(Rest r) => r == Rest.Full ? Balance.RestFull : r == Rest.Feed ? Balance.RestFeed : Balance.RestPractice;
         public float RestFatNow(Rest r) => RestFat(r) - (Day >= Balance.GrowRest ? Balance.RestGrowth : 0);
 

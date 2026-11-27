@@ -69,7 +69,9 @@ namespace Kaomoji
         int? focusReq;
         int toastSeq, followersAtDayStart;
         bool blocked;
-        float hoverFat, hoverFatNext; // 고르려는 행동이 피로를 얼마나 바꾸는지: 게이지에서 깜빡인다
+        // 고르려는 행동이 수치를 어떻게 바꾸는지: 게이지에서 깜빡인다 (피로, 의심, 팔로워, 의심 절반 방패)
+        (float fat, float sus, float f, bool shield) hover, hoverNext;
+        float hoverFat => hover.fat;
         Emo selEye = Emo.Neutral, selMouth = Emo.Neutral;
         Decor selDecor;
         EncResult enc;
@@ -237,7 +239,7 @@ namespace Kaomoji
             if (Event.current.type == EventType.Repaint)
             {
                 (lastAnchors, anchors) = (anchors, lastAnchors); anchors.Clear();
-                hoverFat = hoverFatNext; hoverFatNext = 0;
+                hover = hoverNext; hoverNext = default;
                 tip = tipNext; tipNext = null;
             }
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Tex(Pal.Letterbox));
@@ -404,10 +406,10 @@ namespace Kaomoji
             GUI.Box(new Rect(r.x - 5, r.y - 5, r.width + 10, r.height + 10), GUIContent.none, hiliteStyle);
         }
 
-        // 마우스를 올린 행동의 피로 변화를 게이지에 미리 보여준다
-        void HoverFat(float d)
+        // 마우스를 올린 행동의 수치 변화를 게이지에 미리 보여준다
+        void HoverFat(float fat, float sus = 0, float f = 0, bool shield = false)
         {
-            if (Event.current.type == EventType.Repaint && GUILayoutUtility.GetLastRect().Contains(Event.current.mousePosition)) hoverFatNext = d;
+            if (Event.current.type == EventType.Repaint && GUILayoutUtility.GetLastRect().Contains(Event.current.mousePosition)) hoverNext = (fat, sus, f, shield);
         }
 
         float coachH = 90;
@@ -723,8 +725,10 @@ namespace Kaomoji
             if (S.Maintenance) { GUILayout.Label("! 정비 중", label); Explain("셧다운 다음 날. 오늘 의심 증가가 절반이다."); }
             bool frenzy = Time.time < frenzyUntil;
             Bar("bar_f", "♥ 팔로워", frenzy ? UnityEngine.Random.Range(0, Balance.FollowerGoal) : S.Followers, Balance.FollowerGoal, Pal.BarFollow,
-                frenzy ? $"{S.Followers + UnityEngine.Random.Range(-999, 99999):#,0}!!" : $"{S.Followers:#,0}", 0, StatHelp[0]);
-            Bar("bar_s", "!? 의심", S.Sus, 100, Pal.BarSus, $"{Mathf.RoundToInt(S.Sus)}", 0, StatHelp[1]);
+                frenzy ? $"{S.Followers + UnityEngine.Random.Range(-999, 99999):#,0}!!" : $"{S.Followers:#,0}", hover.f, StatHelp[0]);
+            // 얼굴 연습 중이거나 그걸 고르려 하면 의심 옆에 ×½ 방패
+            bool shield = S.Practicing || (hover.shield && Time.time * 4 % 2 < 1);
+            Bar("bar_s", "!? 의심", S.Sus, 100, Pal.BarSus, $"{Mathf.RoundToInt(S.Sus)}{(shield ? "  ×½" : "")}", hover.sus, StatHelp[1]);
             Bar("bar_fat", "~ 피로", S.Fat, S.FatMax, Pal.BarFat, $"{Mathf.RoundToInt(S.Fat)}/{S.FatMax}", hoverFat, S.BrokeDown ? StatHelp[2] + " 한 번 무너졌다. 다시 다 차면 끝." : StatHelp[2]);
             if (statHelp) foreach (var h in StatHelp) GUILayout.Label(h, small);
             GUILayout.BeginHorizontal();
@@ -758,7 +762,7 @@ namespace Kaomoji
                 float a = Mathf.Clamp(v + Mathf.Min(0, preview), 0, max), b = Mathf.Clamp(v + Mathf.Max(0, preview), 0, max);
                 GUI.DrawTexture(new Rect(r.x + r.width * a / max, r.y, r.width * (b - a) / max, r.height), Tex(preview > 0 ? Pal.Hot : Pal.Ease));
             }
-            GUILayout.Label(value, dotStyle, GUILayout.Width(84));
+            GUILayout.Label(preview != 0 && Time.time * 4 % 2 < 1 ? $"{preview:+#,0;-#,0}" : value, dotStyle, GUILayout.Width(84)); // 미리보기 중엔 바뀔 양이 깜빡인다
             GUILayout.EndHorizontal();
             Mark(key);
             Explain(help);
@@ -1022,10 +1026,10 @@ namespace Kaomoji
                 Mark("close_result");
                 return;
             }
-            HomeCard("zZ", "푹 쉬기", S.RestFatNow(Rest.Full), () => DoRest(Rest.Full, "zZ"), $"!? {Balance.RestFullSus:+0;-0}");
-            HomeCard("((•))", "피드 구경", S.RestFatNow(Rest.Feed), () => DoRest(Rest.Feed, "((•))"), $"♥ +{Balance.FeedFollowers}");
-            HomeCard("( ._.)", "얼굴 연습", S.RestFatNow(Rest.Practice), () => DoRest(Rest.Practice, "( ._.)"), $"!? ×½ {Balance.PracticeDays}일");
-            if (S.CanCombine) HomeCard("∞", "장식 섞기", 0, MixPopup);
+            HomeCard("zZ", "푹 쉬기", (S.RestFatNow(Rest.Full), Balance.RestFullSus, 0, false), () => DoRest(Rest.Full, "zZ"));
+            HomeCard("((•))", "피드 구경", (S.RestFatNow(Rest.Feed), 0, Balance.FeedFollowers, false), () => DoRest(Rest.Feed, "((•))"));
+            HomeCard("( ._.)", "얼굴 연습", (S.RestFatNow(Rest.Practice), 0, 0, true), () => DoRest(Rest.Practice, "( ._.)"));
+            if (S.CanCombine) HomeCard("∞", "장식 섞기", default, MixPopup);
             Mark("home_cards");
         }
 
@@ -1039,13 +1043,21 @@ namespace Kaomoji
         }
 
         float homeT;
-        void HomeCard(string icon, string name, float fat, Action act, string extra = null)
+        // 효과는 숫자 대신 상태 표시줄과 같은 그림으로: 🔋▲▲ 배터리가 찬다, !?▼ 의심이 내려간다, ♥▲ 팔로워, !?×½ 방패
+        static string Arrows(float d, float unit) => new string(d < 0 ? '▼' : '▲', Math.Max(1, Mathf.RoundToInt(Math.Abs(d) / unit)));
+
+        void HomeCard(string icon, string name, (float fat, float sus, float f, bool shield) fx, Action act)
         {
             Btn($"<size=26>{icon}</size>   <size=16>{name}</size>", act, true, cardBtn, GUILayout.Height(74));
             var r = GUILayoutUtility.GetLastRect();
-            HoverFat(fat);
-            // 쉬면서 피로가 내려간다는 걸 늘 보이게: 카드 오른쪽에 효과 배지
-            var badge = $"~ {fat:+0;-0}" + (extra != null ? $"  {extra}" : "");
+            HoverFat(fx.fat, fx.sus, fx.f, fx.shield);
+            var parts = new List<string>();
+            if (fx.fat != 0) parts.Add("🔋" + Arrows(-fx.fat, 15));
+            if (fx.sus != 0) parts.Add("!?" + Arrows(fx.sus, 10));
+            if (fx.f != 0) parts.Add("♥" + Arrows(fx.f, 150));
+            if (fx.shield) parts.Add("!?×½");
+            if (parts.Count == 0) return;
+            var badge = string.Join("  ", parts);
             var bs = new GUIStyle(clockOn) { font = dot, fontSize = 16, padding = new RectOffset(8, 8, 2, 2) };
             var w = bs.CalcSize(new GUIContent(badge)).x;
             GUI.Label(new Rect(r.xMax - w - 10, r.center.y - 13, w, 26), badge, bs);
