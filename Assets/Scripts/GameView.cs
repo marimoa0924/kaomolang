@@ -1228,7 +1228,9 @@ namespace Kaomoji
         // 글 본문: 닉네임, 가려진 글(이모지와 읽히는 글자 몇 개), 사진 단서
         void PostBody(Post post, int i = -1)
         {
-            GUILayout.Label($"{(post.Id.StartsWith("f") || post.Id.StartsWith("m") ? "→ " : "")}{(Conform >= 0.9f && !post.Holdout ? Mimic : Handle(post))}", new GUIStyle(dotStyle) { fontSize = 14 });
+            int lv = S.IntimacyOf(post.Author);
+            string bond = S.On(Feature.Intimacy) && Regulars.Contains(post.Author ?? "") ? $"  {new string('♥', lv)}{new string('·', 3 - lv)}{(S.SulkyTonight(post.Author) ? " (｀ε´)" : "")}" : "";
+            GUILayout.Label($"{(post.Id.StartsWith("f") || post.Id.StartsWith("m") ? "→ " : "")}{(Conform >= 0.9f && !post.Holdout ? Mimic : Handle(post))}{bond}", new GUIStyle(dotStyle) { fontSize = 14 });
             GUILayout.Label(Censor(post.Text, post.Id.Sum(c => c), post.Holdout), new GUIStyle(postStyle) { wordWrap = true });
             GUILayout.Label(post.Clues[0], small);
             if (i >= 0) Mark($"clue_{i}");
@@ -1518,12 +1520,29 @@ namespace Kaomoji
 
         // ---------- 설정: 테스트 차수와 P2 기능 하나씩 끄고 켜기 ----------
 
-        static readonly Dictionary<Feature, string> FeatureNames = new()
+        // 설정 창의 이름과 한 줄 설명 (마우스를 올리면 보인다)
+        static readonly Dictionary<Feature, (string name, string what)> FeatureNames = new()
         {
-            [Feature.Rest] = "휴식", [Feature.Typing] = "입력 중 표시", [Feature.Misuse] = "오역 후속 글",
-            [Feature.Notices] = "아침 공지", [Feature.PlaceAbility] = "장소 능력", [Feature.Intimacy] = "단골 친밀도", [Feature.DecorMix] = "장식 섞기",
-            [Feature.HiddenMood] = "기분 숨김", [Feature.Maintenance] = "정비 카드", [Feature.Rewind] = "되감기", [Feature.BlankPosts] = "빈칸 긴 글",
+            [Feature.Rest] = ("휴식", "[집]에서 푹 쉬기·피드 구경·얼굴 연습 중 하나로 피로를 내린다."),
+            [Feature.Typing] = ("입력 중 표시", "단골 글이 올라오기 전 '입력 중'이 뜬다. 길수록 감정이 세고, 깜빡이면 섬뜩을 반기는 글."),
+            [Feature.Misuse] = ("오역 후속 글", "일부 글에 크게 틀리거나 섬뜩하게 답하면, 다음 밤 그 팬이 내 얼굴을 엉뚱한 곳에 쓴 글이 온다."),
+            [Feature.Notices] = ("아침 공지", "2일차부터 아침마다 유행 공지 한 장. 그날 하루 규칙이 하나 바뀐다."),
+            [Feature.PlaceAbility] = ("장소 능력", "장소 호감 2·3단계마다 작은 보너스가 붙는다 (외출 피로 −3 등)."),
+            [Feature.Intimacy] = ("단골 친밀도", "단골에게 맞히면 ♥가 쌓이고, 틀리거나 미루면 서운해서 다음 밤 입이 따끔·쿨만 남는다."),
+            [Feature.DecorMix] = ("장식 섞기", "[집]에서 특수 장식 둘을 섞어 새 장식을 만든다."),
+            [Feature.HiddenMood] = ("기분 숨김", "호감 2단계부터 NPC가 절반 확률로 말을 숨긴다(“……”). 상황 설명만 보고 고른다."),
+            [Feature.Maintenance] = ("정비 카드", "셧다운 다음 날 아침 정비 카드가 오고, 그날 의심 증가가 절반."),
+            [Feature.Rewind] = ("되감기", "날마다 자동 저장. 위쪽 ◁ 버튼으로 지난 날 아침으로 돌아간다."),
+            [Feature.BlankPosts] = ("빈칸 긴 글", "빈칸(□)이 둘인 글. 빈칸마다 얼굴을 따로 골라 답한다."),
         };
+
+        // 켜면 지금 바로 열리고 새 판에도 이어진다 (표의 날짜보다 먼저). 끄면 이 판과 새 판 모두에서 숨긴다
+        void Toggle(Feature f, bool on)
+        {
+            if (on) { S.Off.Add(f); return; }
+            S.Off.Remove(f);
+            GameData.UnlockTable[f] = S.Unlocks[f] = new Unlock(Math.Min(S.Unlocks[f].Day, S.Day), true);
+        }
 
         void DrawSettings()
         {
@@ -1539,9 +1558,10 @@ namespace Kaomoji
                 GUILayout.BeginHorizontal();
                 foreach (var f in all.Skip(k).Take(2))
                 {
-                    var u = S.Unlocks[f]; bool off = S.Off.Contains(f); // u: 표의 날짜·켜짐, off: 이 판에서 손으로 끈 것
-                    string state = !u.On ? "미룸" : off ? "끔" : $"{u.Day}일";
-                    Btn($"{(u.On && !off ? "●" : "○")} {FeatureNames[f]}  {state}", () => { if (off) S.Off.Remove(f); else S.Off.Add(f); }, u.On, u.On && !off ? tabOn : tabOff, GUILayout.Height(30), GUILayout.Width(205));
+                    var u = S.Unlocks[f]; bool on = S.On(f);
+                    string state = on ? "켜짐" : S.Off.Contains(f) || !u.On ? "꺼짐" : $"{u.Day}일부터";
+                    Btn($"{(on ? "●" : "○")} {FeatureNames[f].name}  {state}", () => Toggle(f, on), true, on ? tabOn : tabOff, GUILayout.Height(30), GUILayout.Width(205));
+                    Explain(FeatureNames[f].what);
                 }
                 GUILayout.EndHorizontal();
             }

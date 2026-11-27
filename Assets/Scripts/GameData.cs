@@ -227,10 +227,10 @@ namespace Kaomoji
         // 장소 호감 단계 능력 (Persona 5의 협력자 랭크)
         public static readonly Dictionary<(string place, int lv), string> Abilities = new()
         {
-            [("park", 2)] = "외출 피로 −3", [("park", 3)] = "100 판정 각성 +10%",
-            [("station", 2)] = "거리 말풍선 해독 단서 +1", [("station", 3)] = "이벤트 제한 시간 +2초",
-            [("store", 2)] = "회복 선택에 야식 먹기", [("store", 3)] = "검문 실수 절반",
-            [("cafe", 2)] = "피드 구경 색 단서 둘", [("cafe", 3)] = "묶음 확정 실패 때 틀린 칸 하나 표시",
+            [("park", 2)] = "외출 피로 −3", [("park", 3)] = "잠 피로 −5 더",
+            [("station", 2)] = "피드 구경 팔로워 +100 더", [("station", 3)] = "만남 실패 의심 절반",
+            [("store", 2)] = "푹 쉬기 의심 −5 더", [("store", 3)] = "게시물 팔로워 ×1.2",
+            [("cafe", 2)] = "답장 팔로워 ×1.1", [("cafe", 3)] = "아쉬운 오답에 팔로워가 줄지 않는다",
         };
 
         public static readonly string[] ActNames = { "", "1막 · 적응", "2막 · 확산", "3막 · 정복" };

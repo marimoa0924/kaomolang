@@ -306,5 +306,20 @@ namespace Kaomoji.Tests
             }
             finally { GameData.UnlockTable = old; }
         }
+
+        [Test]
+        public void PlaceAbilitiesDoSomethingWhenOn()
+        {
+            var s = new GameState(1) { Fat = 50 };
+            s.Unlocks[Feature.PlaceAbility] = new Unlock(1, true);
+            foreach (var p in new[] { "park", "station", "store", "cafe" }) s.Aff[p] = 3;
+            Assert.AreEqual(Balance.FatOut - 3, s.OutingFat);                 // 공원 2
+            int f = s.Followers;
+            s.DoRest(Rest.Feed); s.EndAction();
+            Assert.AreEqual(f + Balance.FeedFollowers + 100, s.Followers);    // 역 2
+            float fat = s.Fat;
+            s.EndNight();
+            Assert.AreEqual(fat + Balance.FatSleep - 5, s.Fat, 0.01);       // 공원 3
+        }
     }
 }

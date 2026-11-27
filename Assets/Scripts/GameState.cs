@@ -224,7 +224,7 @@ namespace Kaomoji
             }
             else
             {
-                AddSus(Balance.DayFailSus);
+                AddSus(Balance.DayFailSus * (HasAbility("station", 3) ? 0.5f : 1));
                 got = Gain(ev.FailMouth);
             }
             if (ev.Kind == EvKind.Passerby) DoneOnce.Add(ev.Id);
@@ -248,8 +248,8 @@ namespace Kaomoji
         public void DoRest(Rest r)
         {
             AddFat(RestFatNow(r));
-            if (r == Rest.Full) AddSus(Balance.RestFullSus);
-            if (r == Rest.Feed) Followers += Balance.FeedFollowers;
+            if (r == Rest.Full) AddSus(Balance.RestFullSus - (HasAbility("store", 2) ? 5 : 0));
+            if (r == Rest.Feed) Followers += Balance.FeedFollowers + (HasAbility("station", 2) ? 100 : 0);
             if (r == Rest.Practice) practiceUntil = Day + Balance.PracticeDays - 1;
             Advance();
         }
@@ -399,7 +399,8 @@ namespace Kaomoji
                 r = Judge(eye, mouth, mood);
                 (f, s) = Balance.Upload(r.Value);
                 if (f > 0 && Is(NoticeKind.HeartDay) && mood == Emo.Shy) f *= 1.5f;
-                if (r == Result.Near && Day >= Balance.GrowNear) f = 0;
+                if (f > 0 && HasAbility("store", 3)) f *= 1.2f;
+                if (r == Result.Near && (Day >= Balance.GrowNear || HasAbility("cafe", 3))) f = 0;
             }
             if (decor != null) f += Balance.DecorBonus * (Is(NoticeKind.DecorBoom) ? 2 : 1);
             if (Is(NoticeKind.StarBan) && (eye == Emo.Joy || mouth == Emo.Joy)) s += 5;
@@ -425,13 +426,14 @@ namespace Kaomoji
             var (bf, bs) = Balance.Reply(r);
             float f = bf, s = bs;
             if (post.WantsCreepy && r == Result.Perfect) s = 0;
-            if (r == Result.Near && Day >= Balance.GrowNear) f = 0; // 12일차 성장 '연기 몰입'
+            if (r == Result.Near && (Day >= Balance.GrowNear || HasAbility("cafe", 3))) f = 0; // 12일차 성장 '연기 몰입', 카페 3단계
             if (f > 0)
             {
                 if (Is(NoticeKind.HeartDay) && answers.Any(a => a.Eye == Emo.Shy || a.Mouth == Emo.Shy)) f *= 1.5f;
                 if (Is(NoticeKind.SameEyeMouth) && eye == mouth) f *= 1.1f;
                 if (Is(NoticeKind.FaceShortage) && Face(eye, mouth) == MostUsedYesterday) f *= 0.7f;
                 if (Is(NoticeKind.AllNighter)) f *= 1.3f;
+                if (HasAbility("cafe", 2)) f *= 1.1f;
             }
             if (Is(NoticeKind.StarBan) && (eye == Emo.Joy || mouth == Emo.Joy)) s += 5;
             return (r, f, s);
@@ -520,7 +522,7 @@ namespace Kaomoji
         public void EndNight()
         {
             if (Ending != Ending.None) return;
-            AddFat(Balance.FatSleep);
+            AddFat(Balance.FatSleep - (HasAbility("park", 3) ? 5 : 0));
             NextDay();
         }
 
