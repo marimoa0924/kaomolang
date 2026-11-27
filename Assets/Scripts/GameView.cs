@@ -466,7 +466,7 @@ namespace Kaomoji
             void One(string a, float d) { if (Mathf.RoundToInt(d) != 0) Float(a, $"{(d > 0 ? "+" : "")}{Mathf.RoundToInt(d):#,0}"); }
             One("bar_f", S.Followers - b.f);
             One("bar_s", S.Sus - b.s);
-            One("bar_fat", S.Fat - b.fat);
+            One("bar_fat", b.fat - S.Fat); // 배터리는 피로의 반대: 피로가 오르면 배터리가 준다
         }
 
         void DrawFloaters()
@@ -740,7 +740,6 @@ namespace Kaomoji
             // 얼굴 연습 중이거나 그걸 고르려 하면 의심 옆에 ×½ 방패
             bool shield = S.Practicing || hover.shield;
             Bar("bar_s", "!? 의심", S.Sus, 100, Pal.BarSus, $"{Mathf.RoundToInt(S.Sus)}{(shield ? "  ×½" : "")}", hover.sus, StatHelp[1]);
-            Bar("bar_fat", "~ 피로", S.Fat, S.FatMax, Pal.BarFat, $"{Mathf.RoundToInt(S.Fat)}/{S.FatMax}", hoverFat, S.BrokeDown ? StatHelp[2] + " 한 번 무너졌다. 다시 다 차면 끝." : StatHelp[2]);
             if (statHelp) foreach (var h in StatHelp) GUILayout.Label(h, small);
             GUILayout.BeginHorizontal();
             GUILayout.Label(Monologue(), small);
@@ -756,7 +755,6 @@ namespace Kaomoji
         {
             $"♥ 팔로워: 마지막 날에 {Balance.FollowerGoal:#,0}명이 넘으면 성공.",
             "!? 의심: 100이면 정체가 들킨다.",
-            "~ 의태 피로: 외출·답장에 오르고 잠·휴식으로 내린다. 위쪽 배터리도 같이 닳는다.",
         };
 
         void Bar(string key, string name, float v, float max, string color, string value, float preview, string help)
@@ -802,9 +800,9 @@ namespace Kaomoji
                 } });
             // 알림: 밤에 답할 SNS가 남아 있으면 흔들린다
             bool ping = S.IsNight && !S.NightDone;
-            GUI.Label(new Rect(VW - 190, 4, 40, BarH - 8), ping ? "🔔!" : "🔔", new GUIStyle(dotStyle) { fontSize = 18, alignment = TextAnchor.MiddleCenter });
+            GUI.Label(new Rect(VW - 250, 4, 40, BarH - 8), ping ? "🔔!" : "🔔", new GUIStyle(dotStyle) { fontSize = 18, alignment = TextAnchor.MiddleCenter });
             // 배터리: 피로가 오를수록 칸이 닳는다. 위험할 땐 깜빡인다
-            var bat = new Rect(VW - 150, 9, 120, BarH - 18);
+            var bat = new Rect(VW - 180, 9, 120, BarH - 18);
             GUI.Label(new Rect(bat.x - 30, 4, 28, BarH - 8), "🔋", new GUIStyle(dotStyle) { fontSize = 18, alignment = TextAnchor.MiddleCenter });
             GUI.Box(bat, GUIContent.none, cellFrame);
             // 고르려는 행동으로 찰 칸은 하늘색, 닳을 칸은 회색으로 미리 (깜빡임 없이)
@@ -812,7 +810,12 @@ namespace Kaomoji
             int now = Cells(S.Fat), after = Cells(S.Fat + hoverFat);
             for (int i = 0; i < Mathf.Max(now, after); i++)
                 GUI.DrawTexture(new Rect(bat.x + 4 + i * 23, bat.y + 4, 19, bat.height - 8), Tex(i >= now ? Pal.Ease : i >= after ? Pal.Gray : Pal.BarFat));
-            ExplainRect("배터리: 의태 피로. 다 닳지 않게 쉬자.", bat, Vector2.zero);
+            // 정확한 남은 양. 고르려는 행동이 있으면 바뀐 뒤 값
+            int left = Mathf.RoundToInt(S.FatMax - S.Fat), leftAfter = Mathf.RoundToInt(Mathf.Clamp(S.FatMax - S.Fat - hoverFat, 0, S.FatMax));
+            var num = new Rect(bat.xMax + 4, 4, 56, BarH - 8);
+            GUI.Label(num, hoverFat != 0 ? $"→{leftAfter}" : $"{left}", new GUIStyle(dotStyle) { fontSize = 18, alignment = TextAnchor.MiddleLeft });
+            MarkRect("bar_fat", new Rect(bat.x, bat.y + 26, bat.width + 60, bat.height), Vector2.zero);
+            ExplainRect($"배터리 {left}/{S.FatMax}. 외출·답장에 닳고 잠·휴식으로 찬다. 다 닳지 않게 쉬자." + (S.BrokeDown ? " 한 번 꺼졌다. 다시 다 닳으면 끝." : ""), new Rect(bat.x - 30, 0, bat.width + 90, BarH), Vector2.zero);
         }
 
         // 창 제목도 글자 대신 아이콘
@@ -1063,7 +1066,7 @@ namespace Kaomoji
             var parts = new List<string>();
             if (f != 0) parts.Add($"♥{f:+#,0;-#,0}");
             if (sus != 0) parts.Add($"!?{sus:+0;-0}{(holdout && sus > 0 ? " Aa" : "")}");
-            if (Math.Abs(fat) >= 0.5f) parts.Add("🔋" + Arrows(-fat, 15));
+            if (Math.Abs(fat) >= 0.5f) parts.Add($"🔋{-fat:+0;-0}");
             return string.Join("  ", parts);
         }
 
@@ -1089,7 +1092,7 @@ namespace Kaomoji
         // 집 활동 결과에 쉬어서 내려간 수치를 한 줄로
         string RestLine((int f, float s, float fat) b)
         {
-            var parts = new List<string> { $"~ 피로 {Mathf.RoundToInt(S.Fat - b.fat):+0;-0}" };
+            var parts = new List<string> { $"🔋 배터리 {Mathf.RoundToInt(b.fat - S.Fat):+0;-0}" };
             if (Mathf.RoundToInt(S.Sus - b.s) != 0) parts.Add($"!? 의심 {Mathf.RoundToInt(S.Sus - b.s):+0;-0}");
             return string.Join("   ", parts);
         }
@@ -1561,11 +1564,11 @@ namespace Kaomoji
         // 설정 창의 이름과 한 줄 설명 (마우스를 올리면 보인다)
         static readonly Dictionary<Feature, (string name, string what)> FeatureNames = new()
         {
-            [Feature.Rest] = ("휴식", "[집]에서 푹 쉬기·피드 구경·얼굴 연습 중 하나로 피로를 내린다."),
+            [Feature.Rest] = ("휴식", "[집]에서 푹 쉬기·피드 구경·얼굴 연습 중 하나로 배터리를 채운다."),
             [Feature.Typing] = ("입력 중 표시", "단골 글이 올라오기 전 '입력 중'이 뜬다. 길수록 감정이 세고, 깜빡이면 섬뜩을 반기는 글."),
             [Feature.Misuse] = ("오역 후속 글", "일부 글에 크게 틀리거나 섬뜩하게 답하면, 다음 밤 그 팬이 내 얼굴을 엉뚱한 곳에 쓴 글이 온다."),
             [Feature.Notices] = ("아침 공지", "2일차부터 아침마다 유행 공지 한 장. 그날 하루 규칙이 하나 바뀐다."),
-            [Feature.PlaceAbility] = ("장소 능력", "장소 호감 2·3단계마다 작은 보너스가 붙는다 (외출 피로 −3 등)."),
+            [Feature.PlaceAbility] = ("장소 능력", "장소 호감 2·3단계마다 작은 보너스가 붙는다 (외출 배터리 소모 −3 등)."),
             [Feature.Intimacy] = ("단골 친밀도", "단골에게 맞히면 ♥가 쌓이고, 틀리거나 미루면 서운해서 다음 밤 입이 따끔·쿨만 남는다."),
             [Feature.DecorMix] = ("장식 섞기", "[집]에서 특수 장식 둘을 섞어 새 장식을 만든다."),
             [Feature.HiddenMood] = ("기분 숨김", "호감 2단계부터 NPC가 절반 확률로 말을 숨긴다(“……”). 상황 설명만 보고 고른다."),
