@@ -108,7 +108,7 @@ namespace Kaomoji
         Font dot, body, round; // DotGothic16: 카오모지·숫자·아이콘 / Gowun Dodum: 한글 본문 / Dongle: 감정 이름·엔딩 제목
         GUIStyle label, small, big, dotStyle, faceStyle, postStyle, roundStyle, winStyle, titleStyle, errTitleStyle, toastStyle,
                  btn, offBtn, closeBtn, card, paper, bubble, iconStyle, taskbar, panel, coachStyle, hiliteStyle, bezelStyle, stampStyle,
-                 cardBtn, badgeOn, badgeOff, clockOn, curtainStyle, selCard, linkBtn, tabOn, tabOff, cellFrame, specialOn, specialOff, passerbyTag;
+                 cardBtn, badgeOn, badgeOff, clockOn, curtainStyle, selCard, linkBtn, tabOn, tabOff, cellFrame, specialOn, passerbyTag;
         readonly Dictionary<string, Texture2D> texCache = new();
         readonly Dictionary<string, GUIStyle> stickerStyles = new();
         readonly Dictionary<Emo, GUIStyle> chips = new(), partBtn = new(), partSel = new(), tintCards = new();
@@ -410,7 +410,7 @@ namespace Kaomoji
         {
             if (Event.current.type != EventType.Repaint) return;
             anchors[key] = new Rect(r.x + o.x, r.y + o.y, r.width, r.height);
-            if (!CoachVisible || Cur.Target != key || Time.time * 3 % 2 > 1.4f) return; // 반투명 대신 깜빡임으로 (팔레트 밖 색을 만들지 않게)
+            if (!CoachVisible || Cur.Target != key) return; // 깜빡임 없이 테두리만 (눈이 아프니까)
             GUI.Box(new Rect(r.x - 5, r.y - 5, r.width + 10, r.height + 10), GUIContent.none, hiliteStyle);
         }
 
@@ -582,7 +582,7 @@ namespace Kaomoji
                 if (t < ShutBoot)
                 {
                     // 정지: 깨진 얼굴 하나와 깜빡이는 정지 문구
-                    if ((int)(t * 3) % 2 == 0) GUI.Label(new Rect(0, H / 2 - 90, W, 70), Glitch("(・_・)", Mathf.Clamp01((t - ShutOff) * 0.5f)), new GUIStyle(faceStyle) { fontSize = 56 });
+                    GUI.Label(new Rect(0, H / 2 - 90, W, 70), Glitch("(・_・)", Mathf.Clamp01((t - ShutOff) * 0.5f)), new GUIStyle(faceStyle) { fontSize = 56 });
                     GUI.Label(new Rect(0, H / 2 + 10, W, 50), Glitch("SYSTEM HALT", 0.25f), big);
                     GUI.Label(new Rect(0, H / 2 + 60, W, 30), Glitch("MIMIC.EXE NOT RESPONDING", 0.3f), new GUIStyle(dotStyle) { fontSize = 18, alignment = TextAnchor.MiddleCenter });
                     return;
@@ -701,7 +701,7 @@ namespace Kaomoji
                 if (!on) { ExplainRect(why, r, Vector2.zero); GUI.Label(new Rect(r.xMax - 30, r.y + 2, 28, 24), S.IsNight ? "zZ" : "…", badgeOff); }
                 // 지금 할 수 있는 행동에 깜빡이는 배지
                 bool now = on && (key == "icon_sns" ? !S.NightDone : key is "icon_outing" or "icon_home");
-                if (now && Time.time * 2 % 2 < 1.3f) GUI.Label(new Rect(r.xMax - 28, r.y + 2, 26, 26), "!", badgeOn);
+                if (now) GUI.Label(new Rect(r.xMax - 28, r.y + 2, 26, 26), "!", badgeOn);
             }
         }
 
@@ -801,7 +801,7 @@ namespace Kaomoji
                 } });
             // 알림: 밤에 답할 SNS가 남아 있으면 흔들린다
             bool ping = S.IsNight && !S.NightDone;
-            GUI.Label(new Rect(VW - 190 + (ping && Time.time * 6 % 2 < 1 ? 2 : 0), 4, 30, BarH - 8), "🔔", new GUIStyle(dotStyle) { fontSize = 18, alignment = TextAnchor.MiddleCenter });
+            GUI.Label(new Rect(VW - 190, 4, 40, BarH - 8), ping ? "🔔!" : "🔔", new GUIStyle(dotStyle) { fontSize = 18, alignment = TextAnchor.MiddleCenter });
             // 배터리: 피로가 오를수록 칸이 닳는다. 위험할 땐 깜빡인다
             var bat = new Rect(VW - 150, 9, 120, BarH - 18);
             GUI.Label(new Rect(bat.x - 30, 4, 28, BarH - 8), "🔋", new GUIStyle(dotStyle) { fontSize = 18, alignment = TextAnchor.MiddleCenter });
@@ -919,7 +919,7 @@ namespace Kaomoji
             bool special = ev.Kind == EvKind.Special;
             // 특수 이벤트: 깜빡이는 띠, 반짝이는 테두리, 얼굴 주위를 도는 별, 보상(특수 이모지) 미리보기
             if (special)
-                GUILayout.Label("★ SPECIAL EVENT ★", (int)(Time.time * 3) % 2 == 0 ? specialOn : specialOff, GUILayout.Height(34));
+                GUILayout.Label("★ SPECIAL EVENT ★", specialOn, GUILayout.Height(34));
             GUILayout.BeginVertical(special ? tintCards[Emo.Joy] : ev.Kind == EvKind.Passerby ? card : paper);
             GUILayout.BeginHorizontal();
             GUILayout.Label(ev.Portrait, new GUIStyle(faceStyle) { fontSize = 34, alignment = TextAnchor.MiddleLeft });
@@ -944,7 +944,7 @@ namespace Kaomoji
             GUILayout.Label(enc == null ? (S.PendingHidden ? "“……”" : $"“{ev.Say}”") : enc.Ok ? ev.WinText : ev.FailText, bubble);
             if (enc == null && S.PendingHidden) Explain("친해지자 기분을 숨긴다. 말 대신 상황으로 읽자.");
             GUILayout.EndVertical();
-            if (special && Event.current.type == EventType.Repaint && (int)(Time.time * 4) % 2 == 0)
+            if (special && Event.current.type == EventType.Repaint)
             {
                 var cr = GUILayoutUtility.GetLastRect();
                 GUI.Box(new Rect(cr.x - 4, cr.y - 4, cr.width + 8, cr.height + 8), GUIContent.none, hiliteStyle);
@@ -1300,8 +1300,8 @@ namespace Kaomoji
             if (rep == null && Time.time - snsOpenT < typing)
             {
                 GUILayout.Label(Handle(post), new GUIStyle(dotStyle) { fontSize = 14 });
-                bool blink = post.WantsCreepy && (int)(Time.time * 5) % 2 == 0;
-                GUILayout.Label(blink ? " " : new string('·', 1 + (int)(Time.time * 3) % 3) + " 입력 중", label, GUILayout.Height(30));
+                // 섬뜩을 반기는 글은 깜빡임 대신 '썼다 지웠다'를 글로
+                GUILayout.Label(new string('·', 1 + (int)(Time.time * 3) % 3) + (post.WantsCreepy ? " 입력 중… 지우는 중…" : " 입력 중"), label, GUILayout.Height(30));
                 GUILayout.EndVertical();
                 GUILayout.EndHorizontal();
                 GUILayout.EndVertical();
@@ -1875,8 +1875,6 @@ namespace Kaomoji
             tabOn.fontStyle = FontStyle.Bold;
             specialOn = Boxed(Bevel(Pal.Hot, Pal.Lightest, Pal.Line), 4);
             specialOn.font = dot; specialOn.fontSize = 22; specialOn.alignment = TextAnchor.MiddleCenter;
-            specialOff = new GUIStyle(specialOn);
-            specialOff.normal.background = Bevel(Pal.TitleA, Pal.Lightest, Pal.Line);
             Still(specialOff);
             passerbyTag = Boxed(Bevel(Pal.Gray, Pal.Lightest, Pal.Line), 2);
             passerbyTag.font = dot; passerbyTag.fontSize = 14; passerbyTag.alignment = TextAnchor.MiddleCenter;
