@@ -385,6 +385,9 @@ namespace Kaomoji
 
         void Float(string anchor, string text) => floaters.Add(new Floater { Anchor = anchor, Text = text, T0 = Time.time });
 
+        // 배터리는 늘 0~100: 피로의 반대를 한계 대비 비율로 (셧다운 뒤 한계가 120이 돼도 100이 최대)
+        float Bat(float fat) => 100 * (1 - Mathf.Clamp(fat, 0, S.FatMax) / S.FatMax);
+
         (int f, float s, float fat) Snap() => (S.Followers, S.Sus, S.Fat);
 
         // 수치 변화는 문장 대신 게이지 옆에 튀어오르는 숫자로
@@ -393,7 +396,7 @@ namespace Kaomoji
             void One(string a, float d) { if (Mathf.RoundToInt(d) != 0) Float(a, $"{(d > 0 ? "+" : "")}{Mathf.RoundToInt(d):#,0}"); }
             One("bar_f", S.Followers - b.f);
             One("bar_s", S.Sus - b.s);
-            One("bar_fat", b.fat - S.Fat); // 배터리는 피로의 반대: 피로가 오르면 배터리가 준다
+            One("bar_fat", Bat(S.Fat) - Bat(b.fat));
         }
 
         void DrawFloaters()
@@ -739,11 +742,11 @@ namespace Kaomoji
             for (int i = 0; i < Mathf.Max(now, after); i++)
                 GUI.DrawTexture(new Rect(bat.x + 4 + i * 23, bat.y + 4, 19, bat.height - 8), Tex(i >= now ? Pal.Ease : i >= after ? Pal.Gray : Pal.BarFat));
             // 정확한 남은 양. 고르려는 행동이 있으면 바뀐 뒤 값
-            int left = Mathf.RoundToInt(S.FatMax - S.Fat), leftAfter = Mathf.RoundToInt(Mathf.Clamp(S.FatMax - S.Fat - hoverFat, 0, S.FatMax));
+            int left = Mathf.RoundToInt(Bat(S.Fat)), leftAfter = Mathf.RoundToInt(Bat(S.Fat + hoverFat));
             var num = new Rect(bat.xMax + 4, 4, 56, BarH - 8);
             GUI.Label(num, hoverFat != 0 ? $"→{leftAfter}" : $"{left}", new GUIStyle(dotStyle) { fontSize = 18, alignment = TextAnchor.MiddleLeft });
             MarkRect("bar_fat", new Rect(bat.x, bat.y + 26, bat.width + 60, bat.height), Vector2.zero);
-            ExplainRect($"배터리 {left}/{S.FatMax}. 외출·답장에 닳고 잠·휴식으로 찬다. 다 닳지 않게 쉬자." + (S.BrokeDown ? " 한 번 꺼졌다. 다시 다 닳으면 끝." : ""), new Rect(bat.x - 30, 0, bat.width + 90, BarH), Vector2.zero);
+            ExplainRect($"배터리 {left}/100. 외출·답장에 닳고 잠·휴식으로 찬다. 다 닳지 않게 쉬자." + (S.BrokeDown ? " 한 번 꺼졌다. 다시 다 닳으면 끝." : ""), new Rect(bat.x - 30, 0, bat.width + 90, BarH), Vector2.zero);
         }
 
         // 창 제목도 글자 대신 아이콘
@@ -1079,7 +1082,8 @@ namespace Kaomoji
             var parts = new List<string>();
             if (f != 0) parts.Add($"♥{f:+#,0;-#,0}");
             if (sus != 0) parts.Add($"!?{sus:+0;-0}{(holdout && sus > 0 ? " Aa" : "")}");
-            if (Math.Abs(fat) >= 0.5f) parts.Add($"🔋{-fat:+0;-0}");
+            float bat = Bat(S.Fat) - Bat(b.fat);
+            if (Math.Abs(bat) >= 0.5f) parts.Add($"🔋{bat:+0;-0}");
             return string.Join("  ", parts);
         }
 
@@ -1105,7 +1109,7 @@ namespace Kaomoji
         // 집 활동 결과에 쉬어서 내려간 수치를 한 줄로
         string RestLine((int f, float s, float fat) b)
         {
-            var parts = new List<string> { $"🔋 배터리 {Mathf.RoundToInt(b.fat - S.Fat):+0;-0}" };
+            var parts = new List<string> { $"🔋 배터리 {Mathf.RoundToInt(Bat(S.Fat) - Bat(b.fat)):+0;-0}" };
             if (Mathf.RoundToInt(S.Sus - b.s) != 0) parts.Add($"!? 의심 {Mathf.RoundToInt(S.Sus - b.s):+0;-0}");
             return string.Join("   ", parts);
         }
