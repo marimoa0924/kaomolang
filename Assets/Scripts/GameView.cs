@@ -82,7 +82,8 @@ namespace Kaomoji
         EncResult enc;
         bool decorTutorial;
         (string stamp, string face, string sub)? homeResult; // 집 활동 결과: 창 안에 도장, 닫기 버튼만 남는다
-        readonly Dictionary<string, (string fan, float t)> replyFx = new(); // 댓글 카드 안에 뜨는 판정과 팬의 한마디
+        readonly Dictionary<string, (string fan, float t, string delta)> replyFx = new(); // 댓글 카드 안에 뜨는 판정, 팬의 한마디, 바뀐 수치
+        string uploadDelta;
         float uploadT = -9;
         Result? uploadR;
         bool statHelp;
@@ -1055,6 +1056,17 @@ namespace Kaomoji
 
         float homeT;
         // 효과는 숫자 대신 상태 표시줄과 같은 그림으로: 🔋▲▲ 배터리가 찬다, !?▼ 의심이 내려간다, ♥▲ 팔로워, !?×½ 방패
+        // 이 선택이 실제로 바꾼 것: 문장 대신 수치 기호로 (♥ 팔로워, !? 의심, 🔋 배터리). 정상인(Aa)에게 답해 오른 의심은 따로 붙인다
+        string Delta((int f, float s, float fat) b, bool holdout = false)
+        {
+            int f = S.Followers - b.f, sus = Mathf.RoundToInt(S.Sus - b.s); float fat = S.Fat - b.fat;
+            var parts = new List<string>();
+            if (f != 0) parts.Add($"♥{f:+#,0;-#,0}");
+            if (sus != 0) parts.Add($"!?{sus:+0;-0}{(holdout && sus > 0 ? " Aa" : "")}");
+            if (Math.Abs(fat) >= 0.5f) parts.Add("🔋" + Arrows(-fat, 15));
+            return string.Join("  ", parts);
+        }
+
         static string Arrows(float d, float unit) => new string(d < 0 ? '▼' : '▲', Math.Max(1, Mathf.RoundToInt(Math.Abs(d) / unit)));
 
         void HomeCard(string icon, string name, (float fat, float sus, float f, bool shield) fx, Action act)
@@ -1152,6 +1164,7 @@ namespace Kaomoji
             "@ 멘션: 팬 글의 마음을 짐작해 얼굴로 답한다. 어려우면 ‖ 나중에 (다음 밤에 서운해하며 돌아온다).",
             "■는 못 읽는 글자. 이모지는 뜻 그대로다. 팔로워가 늘면 읽히는 글자도 는다.",
             "틀려도 분위기가 같으면 아쉬운 오답(…). 분위기까지 틀리면 큰 오답(×).",
+            "판정 아래 기호는 그 답이 바꾼 것: ♥ 팔로워, !? 의심, 🔋 배터리. Aa는 아직 글자를 쓰는 사람에게 답해 의심이 오른 것.",
         };
 
         void DrawSns()
@@ -1200,10 +1213,11 @@ namespace Kaomoji
             GUIUtility.RotateAroundPivot(-6, sr.center);
             GUI.Label(sr, face, StickerStyle(Pal.Lightest));
             GUI.matrix = keep;
-            if (S.Uploaded && uploadR.HasValue)
+            if (S.Uploaded)
             {
-                GUILayout.BeginArea(new Rect(photo.x + 10, photo.y + 8, 240, 100));
-                StampIn(ResultName(uploadR.Value), uploadT, 56);
+                GUILayout.BeginArea(new Rect(photo.x + 10, photo.y + 8, 240, 130));
+                if (uploadR.HasValue) StampIn(ResultName(uploadR.Value), uploadT, 56);
+                GUILayout.Label(uploadDelta, new GUIStyle(dotStyle) { fontSize = 15, alignment = TextAnchor.MiddleCenter });
                 GUILayout.EndArea();
             }
             // 좋아요는 사진 왼쪽 아래에서 차오른다
@@ -1335,12 +1349,13 @@ namespace Kaomoji
                 if (rep.Held) GUILayout.Label("‖ 나중에 답하기로 했다", small);
                 else
                 {
-                    var fx = replyFx.TryGetValue(post.Id, out var v) ? v : (null, -9f);
+                    var fx = replyFx.TryGetValue(post.Id, out var v) ? v : (null, -9f, null);
                     GUILayout.BeginHorizontal();
                     Avatar("ψ", Pal.Hot, 28);
                     GUILayout.Label($"{MyHandle}  {rep.Face}{(rep.Face2 != null ? "  " + rep.Face2 : "")}", new GUIStyle(dotStyle) { fontSize = 16, alignment = TextAnchor.MiddleLeft }, GUILayout.Height(28));
                     GUILayout.BeginVertical(GUILayout.Width(110));
                     StampIn(ResultName(rep.R.Value), fx.Item2, 24);
+                    if (fx.Item3 != null) GUILayout.Label(fx.Item3, new GUIStyle(dotStyle) { fontSize = 13, alignment = TextAnchor.MiddleCenter, wordWrap = true });
                     GUILayout.EndVertical();
                     GUILayout.EndHorizontal();
                     if (fx.Item1 != null)
@@ -1435,7 +1450,7 @@ namespace Kaomoji
             if (decor != null) { frenzyUntil = Time.time + 1.8f; S.Decors.Remove(decor); selDecor = null; } // shortcut: 장식은 한 번 쓰면 사라진다고 가정, 스펙 확인 필요
             if (S.Went != null && r is Result.Perfect or Result.Success) knownMood.Add(S.Went);
             Floats(before);
-            uploadR = r; uploadT = Time.time; uploadFace = face;
+            uploadR = r; uploadT = Time.time; uploadFace = face; uploadDelta = Delta(before);
             lastFace = Face(selEye, selMouth);
             // 좋아요는 팔로워 수에 비례, 반응이 좋을수록 많이. 댓글도 그만큼 달린다
             float factor = r switch { Result.Perfect => 0.5f, Result.Success => 0.35f, Result.Creepy => 0.6f, Result.Near => 0.1f, Result.Wrong => 0.03f, _ => 0.08f };
@@ -1469,7 +1484,7 @@ namespace Kaomoji
             var (r, _, newSyn) = S.DoReply(i, selEye, selMouth);
             Floats(before);
             lastFace = Face(selEye, selMouth);
-            replyFx[post.Id] = (newSyn != null ? $"{Fan(post, r)}  [{newSyn.Name}]" : Fan(post, r), Time.time);
+            replyFx[post.Id] = (newSyn != null ? $"{Fan(post, r)}  [{newSyn.Name}]" : Fan(post, r), Time.time, Delta(before, post.Holdout));
             diary.Add(new Sticker($"{Face(selEye, selMouth)}{ResultMark(r)}", E[selEye].Color, r <= Result.Success ? Memory.ReplyGood : Memory.ReplyBad));
             MaybeError();
         }
@@ -1486,7 +1501,7 @@ namespace Kaomoji
             Floats(before);
             lastFace = Face(e2, m2);
             var worse = r1 > r2 ? r1 : r2;
-            replyFx[post.Id] = (Fan(post, worse), Time.time);
+            replyFx[post.Id] = (Fan(post, worse), Time.time, Delta(before, post.Holdout));
             diary.Add(new Sticker($"{Face(e1, m1)}{ResultMark(r1)} {Face(e2, m2)}{ResultMark(r2)}", E[e1].Color, worse <= Result.Success ? Memory.ReplyGood : Memory.ReplyBad));
             MaybeError();
         }
