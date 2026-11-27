@@ -23,7 +23,7 @@ namespace Kaomoji
     // 시스템마다 스위치와 처음 열리는 날 (Unlocks.csv). 미룬 것은 코드를 지우지 않고 꺼 둔다
     public enum Feature
     {
-        Rest, Street, Typing, Misuse,                                                         // v5
+        Rest, Typing, Misuse,                                                                 // v5
         Notices, PlaceAbility, Intimacy, DecorMix, HiddenMood, Maintenance, Rewind, BlankPosts, // 미룸
     }
 

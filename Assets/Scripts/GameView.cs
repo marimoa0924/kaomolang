@@ -116,8 +116,6 @@ namespace Kaomoji
         int blankSlot;                                         // 빈칸 긴 글에서 지금 고르는 빈칸
         readonly (Emo eye, Emo mouth)[] blankFaces = new (Emo, Emo)[2];
         int blankFor = -1;
-        List<string> street;                                   // 외출하면 만남 전에 스쳐 가는 거리 말풍선
-        float streetT = -99;
         readonly List<Decor> mixSel = new();
 
         Step Cur => steps != null && step < steps.Count ? steps[step] : null;
@@ -348,7 +346,6 @@ namespace Kaomoji
             enc = null; homeResult = null; replyFx.Clear(); uploadR = null; target = -2; snsTab = -1; knownMood.Clear();
             selEye = selMouth = Emo.Neutral;
             selDecor = null;
-            street = null;
         }
 
         // 날이 바뀌면: 자동 저장, 아침 공지는 막이 걷힌 뒤
@@ -356,7 +353,6 @@ namespace Kaomoji
         {
             if (S.Ending == Ending.None) daySaves[S.Day] = S.Clone();
             noticeDue = true;
-            street = null;
         }
 
         // 지난 날 아침으로 되돌아간다 (Papers, Please의 날짜 저장). shortcut: 메모리에만, 정식판에선 파일 저장
@@ -367,7 +363,7 @@ namespace Kaomoji
             open.Clear(); popups.Clear(); toasts.Clear(); floaters.Clear(); diary.Clear();
             followersAtDayStart = S.Followers;
             enc = null; homeResult = null; replyFx.Clear(); uploadR = null; target = -2; snsTab = -1;
-            selEye = selMouth = Emo.Neutral; selDecor = null; street = null;
+            selEye = selMouth = Emo.Neutral; selDecor = null;
             noticeDue = true;
         }
 
@@ -888,7 +884,7 @@ namespace Kaomoji
                 {
                     var p = list[j];
                     Btn($"<size=40>{p.Icon}</size>\n<size=20>{Hearts(S.Aff.GetValueOrDefault(p.Id))}</size>\n<size=14>{AffPips(p.Id)}</size>",
-                        () => { S.PrepareOuting(p.Id); enc = null; selEye = selMouth = Emo.Neutral; Close(Win.Places); Open(Win.Encounter); street = InTutorial || !S.On(Feature.Street) ? null : Street(); streetT = Time.time; },
+                        () => { S.PrepareOuting(p.Id); enc = null; selEye = selMouth = Emo.Neutral; Close(Win.Places); Open(Win.Encounter); },
                         true, iconStyle, GUILayout.Height(120));
                     Mark($"place_{j}");
                     Explain(p.Name);
@@ -905,7 +901,6 @@ namespace Kaomoji
             GUILayout.BeginHorizontal();
 
             GUILayout.BeginVertical(GUILayout.Width(400));
-            StreetBubble();
             bool special = ev.Kind == EvKind.Special;
             // 특수 이벤트: 깜빡이는 띠, 반짝이는 테두리, 얼굴 주위를 도는 별, 보상(특수 이모지) 미리보기
             if (special)
@@ -965,32 +960,6 @@ namespace Kaomoji
             }
             GUILayout.EndVertical();
 
-            GUILayout.EndHorizontal();
-        }
-
-        // 거리 말풍선 (Headliner: NoviNews의 산책): 어제 내 얼굴, 오역된 얼굴이 섞여 세계가 물드는 걸 낮에도 본다. 보이기만 한다
-        const float StreetEach = 2f;
-        List<string> Street()
-        {
-            int seed = S.Day * 13 + S.Visits.Values.Sum();
-            bool mimicDay = S.Today?.Kind == NoticeKind.MimicDay;
-            string mine = S.YesterdayPostFace ?? lastFace, mis = S.MisusedFaces.FirstOrDefault();
-            return new List<string>
-            {
-                mimicDay ? string.Concat(Enumerable.Repeat(Mimic, 3)) : Censor(mine != null ? $"요즘 다들 이 얼굴 해 {mine}" : "오늘 하늘 맑다 ✨", seed),
-                mimicDay ? string.Concat(Enumerable.Repeat(Mimic, 2)) : Censor(mis != null ? $"장례식에서도 {mis} 이 얼굴 쓰더라" : "다들 얼굴로만 말하네 😳", seed + 1),
-            };
-        }
-
-        void StreetBubble()
-        {
-            if (street == null || enc != null) return;
-            int i = (int)((Time.time - streetT) / StreetEach);
-            if (i >= street.Count) return;
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("(・_・)", new GUIStyle(dotStyle) { fontSize = 18 }, GUILayout.Width(60), GUILayout.Height(40));
-            GUILayout.Label(street[i], bubble);
-            if (GUILayout.Button("▶▶", closeBtn, GUILayout.Width(40), GUILayout.Height(30)) && !blocked) streetT -= StreetEach;
             GUILayout.EndHorizontal();
         }
 
@@ -1551,7 +1520,7 @@ namespace Kaomoji
 
         static readonly Dictionary<Feature, string> FeatureNames = new()
         {
-            [Feature.Rest] = "휴식", [Feature.Street] = "거리 말풍선", [Feature.Typing] = "입력 중 표시", [Feature.Misuse] = "오역 후속 글",
+            [Feature.Rest] = "휴식", [Feature.Typing] = "입력 중 표시", [Feature.Misuse] = "오역 후속 글",
             [Feature.Notices] = "아침 공지", [Feature.PlaceAbility] = "장소 능력", [Feature.Intimacy] = "단골 친밀도", [Feature.DecorMix] = "장식 섞기",
             [Feature.HiddenMood] = "기분 숨김", [Feature.Maintenance] = "정비 카드", [Feature.Rewind] = "되감기", [Feature.BlankPosts] = "빈칸 긴 글",
         };
