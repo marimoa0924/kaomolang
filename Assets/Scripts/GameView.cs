@@ -1875,7 +1875,6 @@ namespace Kaomoji
             tabOn.fontStyle = FontStyle.Bold;
             specialOn = Boxed(Bevel(Pal.Hot, Pal.Lightest, Pal.Line), 4);
             specialOn.font = dot; specialOn.fontSize = 22; specialOn.alignment = TextAnchor.MiddleCenter;
-            Still(specialOff);
             passerbyTag = Boxed(Bevel(Pal.Gray, Pal.Lightest, Pal.Line), 2);
             passerbyTag.font = dot; passerbyTag.fontSize = 14; passerbyTag.alignment = TextAnchor.MiddleCenter;
             cellFrame = new GUIStyle { border = new RectOffset(2, 2, 2, 2) };
