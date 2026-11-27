@@ -23,7 +23,12 @@ namespace Kaomoji
         class Popup { public string Title, Ok = "▶"; public Action Draw, OnOk; }
         class Toast { public string Body; public float T0; public int Id; }
         class Floater { public string Anchor, Text; public float T0; }
-        class Sticker { public string Text, Color; public Sticker(string t, string c) { Text = t; Color = c; } }
+        class Sticker
+        {
+            public string Text, Color, Place; public Memory? Kind; // Kind가 있으면 오늘의 한 장면으로 고를 수 있다
+            public Sticker(string t, string c, Memory? kind = null, string place = null) { Text = t; Color = c; Kind = kind; Place = place; }
+        }
+        int diaryPick = -1; float diaryPickT = -9;
         class EncResult { public Encounter Ev; public bool Ok; public Emo? Mouth; public Decor Decor; public float T; }
 
         // 튜토리얼 한 단계: Target을 가리키고, Done이 참이 되거나 [다음]을 누르면 넘어간다
@@ -159,7 +164,8 @@ namespace Kaomoji
                 new("hold_1", "어려운 글은 [‖ 나중에].\n다음 밤에 서운해하며 돌아온다.", () => S.Replies[1] != null || PastDay1(), true),
                 new("feed", "남은 글에도 멘션을 달자.", () => S.Replies.All(r => r != null) || PastDay1()),
                 new("send", "결과를 봤으면 창을 닫자.", () => open.Contains(Win.Diary) || PastDay1()),
-                new("sleep", "오늘 한 일이 일기에 남는다.\nzZ로 잠들자.", () => PastDay1()),
+                new("diary", "오늘 한 장면을 골라 크게 붙이자.\n고른 장면이 내일을 돕는다.", () => diaryPick >= 0 || PastDay1()),
+                new("sleep", "zZ로 잠들자.", () => PastDay1()),
             };
             mainSteps = steps.Count;
         }
@@ -182,8 +188,10 @@ namespace Kaomoji
             {
                 curtainSwitched = true;
                 var before = Snap();
+                var pick = diaryPick >= 0 && diaryPick < diary.Count ? diary[diaryPick] : null;
                 S.EndNight();
-                diary.Clear(); replyFx.Clear();
+                if (pick?.Kind is { } m && S.Ending == Ending.None) S.ApplyMemory(m, pick.Place);
+                diary.Clear(); replyFx.Clear(); diaryPick = -1;
                 uploadR = null; target = -2; snsTab = -1;
                 open.Clear(); enc = null; homeResult = null; // 날이 바뀌면 모든 창을 닫는다
                 followersAtDayStart = S.Followers;
@@ -206,7 +214,7 @@ namespace Kaomoji
                 shutSwitched = true;
                 S.ForceEndDay();
                 open.Clear(); popups.Clear(); toasts.Clear();
-                enc = null; homeResult = null; diary.Clear(); replyFx.Clear();
+                enc = null; homeResult = null; diary.Clear(); replyFx.Clear(); diaryPick = -1;
                 uploadR = null; target = -2; snsTab = -1;
                 followersAtDayStart = S.Followers;
                 NewDay();
@@ -343,7 +351,7 @@ namespace Kaomoji
             daySaves.Clear();
             daySaves[1] = S.Clone();
             noticeDue = true;
-            open.Clear(); popups.Clear(); toasts.Clear(); floaters.Clear(); diary.Clear();
+            open.Clear(); popups.Clear(); toasts.Clear(); floaters.Clear(); diary.Clear(); diaryPick = -1;
             followersAtDayStart = 0;
             enc = null; homeResult = null; replyFx.Clear(); uploadR = null; target = -2; snsTab = -1; knownMood.Clear();
             selEye = selMouth = Emo.Neutral;
@@ -362,7 +370,7 @@ namespace Kaomoji
         {
             S = daySaves[day].Clone();
             foreach (var d in daySaves.Keys.Where(d => d > day).ToList()) daySaves.Remove(d);
-            open.Clear(); popups.Clear(); toasts.Clear(); floaters.Clear(); diary.Clear();
+            open.Clear(); popups.Clear(); toasts.Clear(); floaters.Clear(); diary.Clear(); diaryPick = -1;
             followersAtDayStart = S.Followers;
             enc = null; homeResult = null; replyFx.Clear(); uploadR = null; target = -2; snsTab = -1;
             selEye = selMouth = Emo.Neutral; selDecor = null;
@@ -975,7 +983,7 @@ namespace Kaomoji
             var (ok, mouth, decor) = S.DoEncounter(selEye);
             enc = new EncResult { Ev = ev, Ok = ok, Mouth = mouth, Decor = decor, T = Time.time };
             Floats(before);
-            diary.Add(new Sticker($"{ev.Portrait} {(ok ? "♥" : "×")}", ok ? Pal.Paper : Pal.Gray));
+            diary.Add(new Sticker($"{ev.Portrait} {(ok ? "♥" : "×")}", ok ? Pal.Paper : Pal.Gray, ok ? Memory.MeetWin : Memory.MeetFail, S.Went));
             if (mouth.HasValue)
             {
                 Fly(E[mouth.Value].Mouth, "gain");
@@ -1447,7 +1455,7 @@ namespace Kaomoji
                 postComments.Add(("♣♠§∞‡"[(k + S.Day) % 5].ToString(), new[] { Pal.BtnFace, Pal.Bubble, Pal.TitleA, Pal.Gray }[k % 4],
                     Conform > 0.8f ? string.Concat(Enumerable.Repeat(face, 2 + k % 3)) // 모두 내 얼굴을 따라 한다
                     : FanKaomoji > 0 && k % 2 == 0 ? $"{lines[(pick + k) % lines.Length]} {FanFaces[(k + S.Day) % FanFaces.Length]}" : lines[(pick + k) % lines.Length]));
-            diary.Add(new Sticker($"↑{face}", Pal.Bubble));
+            diary.Add(new Sticker($"↑{face}", Pal.Bubble, Memory.Post));
         }
 
         void Reply(int i)
@@ -1459,7 +1467,7 @@ namespace Kaomoji
             Floats(before);
             lastFace = Face(selEye, selMouth);
             replyFx[post.Id] = (newSyn != null ? $"{Fan(post, r)}  [{newSyn.Name}]" : Fan(post, r), Time.time);
-            diary.Add(new Sticker($"{Face(selEye, selMouth)}{ResultMark(r)}", E[selEye].Color));
+            diary.Add(new Sticker($"{Face(selEye, selMouth)}{ResultMark(r)}", E[selEye].Color, r <= Result.Success ? Memory.ReplyGood : Memory.ReplyBad));
             MaybeError();
         }
 
@@ -1476,7 +1484,7 @@ namespace Kaomoji
             lastFace = Face(e2, m2);
             var worse = r1 > r2 ? r1 : r2;
             replyFx[post.Id] = (Fan(post, worse), Time.time);
-            diary.Add(new Sticker($"{Face(e1, m1)}{ResultMark(r1)} {Face(e2, m2)}{ResultMark(r2)}", E[e1].Color));
+            diary.Add(new Sticker($"{Face(e1, m1)}{ResultMark(r1)} {Face(e2, m2)}{ResultMark(r2)}", E[e1].Color, worse <= Result.Success ? Memory.ReplyGood : Memory.ReplyBad));
             MaybeError();
         }
 
@@ -1581,27 +1589,53 @@ namespace Kaomoji
 
         // ---------- 그림 일기: 글씨 없이 그림과 스티커로 하루를 기록한다 ----------
 
+        // 오늘의 한 장면: 고를 수 있는 스티커마다 내일 효과 (상태 표시줄과 같은 그림)
+        static string MemoryBadge(Memory m) => m switch
+        {
+            Memory.MeetWin => "♥ 호감▲", Memory.MeetFail => "내일 → 🔋▲", Memory.ReplyGood => "♥▲",
+            Memory.ReplyBad => "!?▼", _ => "내일 ↑ ♥×1.2",
+        };
+
         void DrawDiary()
         {
-            // 글씨 없이 그림과 스티커로: 만난 사람, 얻은 입, 답장 판정, 팔로워 변화, 열린 성장
+            // 글씨 없이 그림과 스티커로. 고를 수 있는 스티커 중 하나를 크게 붙여야 잠들 수 있다 (고르려면 봐야 하니까)
             GUILayout.BeginVertical(paper);
             GUILayout.Label($"{S.Day}/{S.LastDay}", new GUIStyle(dotStyle) { fontSize = 26 });
             var area = GUILayoutUtility.GetRect(580, 250);
             var keep = GUI.matrix;
+            var mouse = Event.current.mousePosition;
             for (int i = 0; i < diary.Count; i++)
             {
                 var st = diary[i];
-                // 스크랩북처럼 조금씩 비뚤게 붙인다
+                // 스크랩북처럼 조금씩 비뚤게 붙인다. 고른 건 아래 칸으로 옮겨 가 빈자리가 남는다
                 float x = area.x + 10 + i % 4 * 142 + i * 23 % 17, y = area.y + 6 + i / 4 * 62 + i * 31 % 9;
                 var r = new Rect(x, y, 128, 52);
                 GUI.matrix = keep;
                 GUIUtility.RotateAroundPivot(i * 37 % 15 - 7, r.center);
-                GUI.Label(r, st.Text, StickerStyle(st.Color));
+                if (i == diaryPick) { GUI.Label(r, "", offBtn); continue; }
+                if (st.Kind is not { } m) { GUI.Label(r, st.Text, StickerStyle(st.Color)); continue; }
+                bool hot = r.Contains(Event.current.mousePosition);
+                if (GUI.Button(r, hot && Time.time * 3 % 2 < 1 ? MemoryBadge(m) : st.Text, StickerStyle(st.Color)) && !blocked) { diaryPick = i; diaryPickT = Time.time; }
+                if (hot && Event.current.type == EventType.Repaint) hoverNext = (0, m == Memory.ReplyBad ? -5 : 0, m == Memory.ReplyGood ? 100 : 0, false); // 오른쪽 위 막대도 미리 움직인다
             }
             GUI.matrix = keep;
+            // 오늘의 한 장면: 크게, 꾹 눌러 붙인다
+            var big = GUILayoutUtility.GetRect(580, 90);
+            if (diaryPick >= 0 && diaryPick < diary.Count)
+            {
+                var st = diary[diaryPick];
+                float sc = 1.4f + 0.3f * Mathf.Max(0, 1 - (Time.time - diaryPickT) * 5);
+                var r = new Rect(big.center.x - 90 * sc / 1.4f, big.y + 4, 180 * sc / 1.4f, 76);
+                GUIUtility.RotateAroundPivot(-4, r.center);
+                GUI.Label(r, $"{st.Text}   {MemoryBadge(st.Kind.Value)}", new GUIStyle(StickerStyle(st.Color)) { fontSize = Mathf.RoundToInt(16 * sc) });
+                GUI.matrix = keep;
+            }
+            else GUI.Label(big, "☆ ?", new GUIStyle(dotStyle) { fontSize = 30, alignment = TextAnchor.MiddleCenter });
             GUILayout.EndVertical();
+            Mark("diary");
 
-            Btn("<size=20>zZ ▶</size>", () => Close(Win.Diary), true, null, GUILayout.Height(44));
+            bool any = diary.Any(d => d.Kind != null);
+            Btn("<size=20>zZ ▶</size>", () => Close(Win.Diary), diaryPick >= 0 || !any, null, GUILayout.Height(44));
             Mark("sleep");
         }
 

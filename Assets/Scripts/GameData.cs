@@ -12,6 +12,7 @@ namespace Kaomoji
     public enum Slot { Morning, Afternoon, Night }
     public enum EvKind { Npc, Passerby, Special }
     public enum Rest { Full, Feed, Practice } // 집 휴식 셋: 고민할 건 숫자뿐
+    public enum Memory { MeetWin, MeetFail, ReplyGood, ReplyBad, Post } // 그림 일기에서 크게 붙인 오늘의 한 장면
     public enum NoticeKind { HeartDay, StarBan, NeutralWeek, NoPhoto, DoubleFace, SameEyeMouth, QuietNight, HoldoutCampaign, DecorBoom, StayIn, FaceShortage, AllNighter, HoldoutSilence, MimicDay, Final }
 
     public static class Balance

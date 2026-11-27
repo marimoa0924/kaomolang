@@ -321,5 +321,21 @@ namespace Kaomoji.Tests
             s.EndNight();
             Assert.AreEqual(fat + Balance.FatSleep - 5, s.Fat, 0.01);       // 공원 3
         }
+
+        [Test]
+        public void DiaryMemoryHelpsTomorrow()
+        {
+            var s = new GameState(1) { Sus = 20 };
+            s.EndNight(); s.ApplyMemory(Memory.MeetFail);
+            Assert.AreEqual(Balance.FatOut - 5, s.OutingFat);          // 실패에서 배운다
+            s.EndNight();
+            Assert.AreEqual(Balance.FatOutSkilled, s.OutingFat);        // 하루만
+            float sus = s.Sus; s.ApplyMemory(Memory.ReplyBad);
+            Assert.AreEqual(sus - 5, s.Sus, 0.01);
+            int f = s.Followers; s.ApplyMemory(Memory.ReplyGood);
+            Assert.AreEqual(f + 100, s.Followers);
+            s.ApplyMemory(Memory.MeetWin, "park");
+            Assert.AreEqual(1, s.AffLevel("park"));                     // 호감 진행 +1 (0→1은 한 번)
+        }
     }
 }

@@ -204,7 +204,7 @@ namespace Kaomoji
         }
 
         // 3일차 성장 '의태 숙련'부터 외출 피로 15 → 10
-        public float OutingFat => (Day >= Balance.GrowOuting ? Balance.FatOutSkilled : Balance.FatOut)
+        public float OutingFat => (Day >= Balance.GrowOuting ? Balance.FatOutSkilled : Balance.FatOut) - (Day == reliefDay ? 5 : 0)
             - (HasAbility("park", 2) ? 3 : 0) + (Is(NoticeKind.StayIn) ? 5 : 0);
 
         // 만남: 상대 감정에 어울리는 눈이면 성공. 성공이든 실패든 상대의 반응 입을 얻는다
@@ -401,6 +401,7 @@ namespace Kaomoji
                 (f, s) = Balance.Upload(r.Value);
                 if (f > 0 && Is(NoticeKind.HeartDay) && mood == Emo.Shy) f *= 1.5f;
                 if (f > 0 && HasAbility("store", 3)) f *= 1.2f;
+                if (f > 0 && Day == postBoostDay) f *= 1.2f;
                 if (r == Result.Near && (Day >= Balance.GrowNear || HasAbility("cafe", 3))) f = 0;
             }
             if (decor != null) f += Balance.DecorBonus * (Is(NoticeKind.DecorBoom) ? 2 : 1);
@@ -518,6 +519,20 @@ namespace Kaomoji
             Uploaded = HeldTonight = false;
             Went = null;
             StartDay();
+        }
+
+        // 그림 일기의 오늘의 한 장면 (EndNight 뒤에 부른다): 고른 스티커 종류가 다음 날을 돕는다. 고르려면 스티커를 봐야 한다
+        int reliefDay, postBoostDay;
+        public void ApplyMemory(Memory m, string place = null)
+        {
+            switch (m)
+            {
+                case Memory.MeetWin: if (place != null) WinAt(place); break; // 좋았던 만남을 곱씹는다: 호감 진행 +1
+                case Memory.MeetFail: reliefDay = Day; break;                // 실패에서 배운다: 오늘 외출 피로 −5
+                case Memory.ReplyGood: Followers += 100; break;              // 자랑한다
+                case Memory.ReplyBad: AddSus(-5); break;                     // 반성한다
+                case Memory.Post: postBoostDay = Day; break;                 // 오늘의 얼굴을 다시 쓴다: 게시물 팔로워 ×1.2
+            }
         }
 
         public void EndNight()
